@@ -1,8 +1,20 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+/**
+ * Robust API Key recovery.
+ * In some browser environments, 'process' is not defined globally.
+ */
+const getApiKey = () => {
+  try {
+    // @ts-ignore
+    return (typeof process !== 'undefined' && process.env?.API_KEY) || '';
+  } catch (e) {
+    return '';
+  }
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 export interface SafetyAnalysisResponse {
   summary: string;
@@ -17,7 +29,7 @@ export const geminiService = {
   translate: async (text: string, targetLang: 'en' | 'ar') => {
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: 'gemini-3-flash-preview',
         contents: `Translate the following airport ground operations text to ${targetLang === 'en' ? 'English' : 'Arabic'}: "${text}". Return only the translated text.`,
       });
       return response.text?.trim() || text;
@@ -31,7 +43,7 @@ export const geminiService = {
     try {
       const conversation = messages.map(m => `${m.senderName}: ${m.text}`).join("\n");
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: 'gemini-3-flash-preview',
         contents: `Summarize this airport ground operations chat log into a single concise paragraph focusing on key actions and status updates: \n\n${conversation}`,
       });
       return response.text?.trim() || "Could not generate summary.";
@@ -44,7 +56,7 @@ export const geminiService = {
   analyzeSafetyReport: async (report: string): Promise<SafetyAnalysisResponse | null> => {
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: 'gemini-3-flash-preview',
         contents: `Analyze the following airport safety report. Provide a professional analysis summary and extract all mentioned locations, equipment, and personnel into structured lists.
         Report: "${report}"`,
         config: {
@@ -96,7 +108,7 @@ export const geminiService = {
     try {
       const taskStr = tasks.map(t => `${t.title} at ${t.location} (${t.status})`).join(", ");
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: 'gemini-3-flash-preview',
         contents: `Summarize these current ground operations tasks into a 30-second shift briefing for airport staff: ${taskStr}`,
       });
       return response.text?.trim();
