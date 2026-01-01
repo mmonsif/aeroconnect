@@ -20,7 +20,6 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>('en');
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -48,53 +47,58 @@ const App: React.FC = () => {
     const newNotif: AppNotification = { ...notif, id: `n-${Date.now()}`, timestamp: new Date(), isRead: false };
     setNotifications(prev => [newNotif, ...prev]);
     setActiveToast(newNotif);
-    setTimeout(() => setActiveToast(current => current?.id === newNotif.id ? null : current), 5000);
+    setTimeout(() => setActiveToast(current => current?.id === newNotif.id ? null : current), 6000);
   }, []);
 
-  // MASTER DATA SYNC
   const syncAllData = useCallback(async () => {
     if (!isSupabaseConfigured()) return;
 
-    // 1. Fetch Users
-    const { data: userData } = await supabase.from('users').select('*');
+    const [
+      { data: userData },
+      { data: taskData },
+      { data: docData },
+      { data: safetyData },
+      { data: leaveData },
+      { data: postsData },
+      { data: messageData }
+    ] = await Promise.all([
+      supabase.from('users').select('*'),
+      supabase.from('tasks').select('*').order('created_at', { ascending: false }),
+      supabase.from('documents').select('*').order('created_at', { ascending: false }),
+      supabase.from('safety_reports').select('*').order('created_at', { ascending: false }),
+      supabase.from('leave_requests').select('*').order('created_at', { ascending: false }),
+      supabase.from('forum_posts').select('*, forum_replies(*)').order('created_at', { ascending: false }),
+      supabase.from('messages').select('*').order('created_at', { ascending: true })
+    ]);
+
     if (userData) setUsers(userData.map(u => ({
       id: u.id, name: u.name, username: u.username, password: u.password,
       role: u.role as UserRole, staffId: u.staff_id, avatar: u.avatar || `https://picsum.photos/seed/${u.id}/200/200`,
       department: u.department, status: u.status, mustChangePassword: u.must_change_password
     })));
 
-    // 2. Fetch Tasks
-    const { data: taskData } = await supabase.from('tasks').select('*').order('created_at', { ascending: false });
     if (taskData) setTasks(taskData.map(t => ({
       id: t.id, title: t.title, description: t.description || '', assignedTo: t.assigned_to || 'Unassigned',
       status: t.status, priority: t.priority, location: t.location || 'N/A', department: t.department || 'General',
       createdAt: t.created_at
     })));
 
-    // 3. Fetch Documents
-    const { data: docData } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
     if (docData) setDocs(docData.map(d => ({
       id: d.id, name: d.name, type: d.type, uploadedBy: d.uploaded_by, date: new Date(d.created_at).toISOString().split('T')[0]
     })));
 
-    // 4. Fetch Safety Reports
-    const { data: safetyData } = await supabase.from('safety_reports').select('*').order('created_at', { ascending: false });
     if (safetyData) setSafetyReports(safetyData.map(r => ({
       id: r.id, reporterId: r.reporter_id, type: r.type, description: r.description,
       severity: r.severity, status: r.status, aiAnalysis: r.ai_analysis, entities: r.entities,
       timestamp: new Date(r.created_at).toLocaleTimeString()
     })));
 
-    // 5. Fetch Leave Requests
-    const { data: leaveData } = await supabase.from('leave_requests').select('*').order('created_at', { ascending: false });
     if (leaveData) setLeaveRequests(leaveData.map(l => ({
       id: l.id, staffId: l.staff_id, staffName: l.staff_name, type: l.type,
       startDate: l.start_date, endDate: l.end_date, status: l.status, reason: l.reason,
       suggestion: l.suggestion, suggestedStartDate: l.suggested_start_date, suggestedEndDate: l.suggested_end_date
     })));
 
-    // 6. Fetch Forum Posts
-    const { data: postsData } = await supabase.from('forum_posts').select('*, forum_replies(*)').order('created_at', { ascending: false });
     if (postsData) setForumPosts(postsData.map(p => ({
       id: p.id, authorId: p.author_id, authorName: p.author_name, title: p.title, content: p.content,
       createdAt: new Date(p.created_at).toLocaleTimeString(),
@@ -103,41 +107,124 @@ const App: React.FC = () => {
       })) || []
     })));
 
-    // 7. Fetch Messages
-    const { data: messageData } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
     if (messageData) setGlobalMessages(messageData.map(m => ({
       id: m.id, senderId: m.sender_id, recipientId: m.recipient_id, senderName: m.sender_name,
       text: m.text, status: m.status, timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     })));
   }, []);
 
-  // Initial Sync
   useEffect(() => {
     syncAllData();
   }, [syncAllData]);
 
-  // REALTIME SUBSCRIPTIONS
+  // FULL REALTIME NOTIFICATION ENGINE
   useEffect(() => {
     if (!currentUser || !isSupabaseConfigured()) return;
 
     const channel = supabase
-      .channel('app-global-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, syncAllData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, syncAllData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, syncAllData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'safety_reports' }, syncAllData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, syncAllData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_posts' }, syncAllData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_replies' }, syncAllData)
+      .channel('full-app-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
           if (payload.eventType === 'INSERT') {
             const m = payload.new as any;
-            if (m.recipient_id === currentUser.id) {
-              addNotification({ title: `New Message`, message: `From ${m.sender_name}`, type: 'forum', severity: 'info' });
+            if (m.sender_id === currentUser.id) return; // Ignore own messages
+            
+            if (m.recipient_id === currentUser.id || m.recipient_id === 'all') {
+              const isEmergency = m.recipient_id === 'all';
+              addNotification({ 
+                title: isEmergency ? "🚨 EMERGENCY ALERT" : "New Message", 
+                message: m.text, 
+                type: isEmergency ? 'safety' : 'forum', 
+                severity: isEmergency ? 'urgent' : 'info' 
+              });
             }
           }
           syncAllData();
       })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'safety_reports' }, (payload) => {
+          const r = payload.new as any;
+          if (r.reporter_id === currentUser.id) return;
+          
+          if (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SAFETY_MANAGER || currentUser.role === UserRole.MANAGER) {
+            addNotification({
+              title: "New Safety Report",
+              message: `High priority hazard reported: ${r.description.substring(0, 40)}...`,
+              type: 'safety',
+              severity: r.severity === 'high' ? 'urgent' : 'info'
+            });
+          }
+          syncAllData();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'forum_posts' }, (payload) => {
+          const p = payload.new as any;
+          if (p.author_id === currentUser.id) return;
+          addNotification({
+            title: "New Forum Topic",
+            message: `${p.author_name}: ${p.title}`,
+            type: 'forum',
+            severity: 'info'
+          });
+          syncAllData();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'documents' }, (payload) => {
+          const d = payload.new as any;
+          if (d.uploaded_by === currentUser.name) return;
+          addNotification({
+            title: "New Manual Uploaded",
+            message: `${d.name} is now available in the portal.`,
+            type: 'doc',
+            severity: 'info'
+          });
+          syncAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const t = payload.new as any;
+            if (t.assigned_to === currentUser.name) {
+              addNotification({
+                title: "New Task Assigned",
+                message: `Duty: ${t.title} at ${t.location}`,
+                type: 'task',
+                severity: t.priority === 'critical' ? 'urgent' : 'info'
+              });
+            }
+          } else if (payload.eventType === 'UPDATE') {
+             const t = payload.new as any;
+             // Notify the creator or manager when status changes
+             if (t.status === 'in_progress' || t.status === 'completed') {
+                addNotification({
+                  title: `Task Update: ${t.title}`,
+                  message: `Status moved to: ${t.status.replace('_', ' ')}`,
+                  type: 'task',
+                  severity: 'info'
+                });
+             }
+          }
+          syncAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, (payload) => {
+          const l = payload.new as any;
+          if (payload.eventType === 'INSERT') {
+            if (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER) {
+              addNotification({
+                title: "New Leave Application",
+                message: `${l.staff_name} requested ${l.type} leave.`,
+                type: 'leave',
+                severity: 'info'
+              });
+            }
+          } else if (payload.eventType === 'UPDATE') {
+             if (l.staff_id === currentUser.staffId) {
+               addNotification({
+                 title: "Leave Request Updated",
+                 message: `Your application is now ${l.status.replace('_', ' ')}.`,
+                 type: 'leave',
+                 severity: l.status === 'approved' ? 'info' : 'urgent'
+               });
+             }
+          }
+          syncAllData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, syncAllData)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -145,7 +232,7 @@ const App: React.FC = () => {
 
   const unreadChatsCount = useMemo(() => {
     if (!currentUser) return 0;
-    return globalMessages.filter(m => m.recipientId === currentUser.id && m.status !== 'read').length;
+    return globalMessages.filter(m => m.recipient_id === currentUser.id && m.status !== 'read').length;
   }, [globalMessages, currentUser]);
 
   const handleLogin = (user: User) => {
@@ -158,16 +245,24 @@ const App: React.FC = () => {
     setCurrentUser(null);
   };
 
-  const toggleLanguage = () => setLanguage(prev => prev === 'en' ? 'ar' : 'en');
-  const toggleSidebar = () => setIsSidebarOpen(prev => !prev);
-  const handleBroadcast = (message: string) => {
-    addNotification({ title: 'BROADCAST', message, type: 'safety', severity: 'urgent' });
-  };
+  const toggleSidebar = useCallback(() => setIsSidebarOpen(prev => !prev), []);
 
-  const isRTL = language === 'ar';
+  const handleBroadcast = useCallback(async (message: string) => {
+    if (!currentUser || !isSupabaseConfigured()) return;
+    try {
+      await supabase.from('messages').insert([{
+        sender_id: currentUser.id,
+        recipient_id: 'all',
+        sender_name: currentUser.name,
+        text: message,
+        status: 'sent'
+      }]);
+    } catch (err) {
+      console.error("Broadcast failed:", err);
+    }
+  }, [currentUser]);
 
   if (!isLoggedIn && !needsPasswordChange) {
-    if (users.length === 0) syncAllData();
     return <Login users={users} onLogin={handleLogin} language={language} />;
   }
 
@@ -184,7 +279,7 @@ const App: React.FC = () => {
 
   return (
     <Router>
-      <div className={`min-h-screen bg-slate-50 dark:bg-slate-950 flex transition-all duration-300 ${isRTL ? 'font-arabic' : ''}`}>
+      <div className={`min-h-screen bg-slate-50 dark:bg-slate-950 flex transition-all duration-300 ${language === 'ar' ? 'font-arabic' : ''}`}>
         {currentUser && (
           <Sidebar 
             user={currentUser} language={language} isOpen={isSidebarOpen} 
@@ -194,11 +289,11 @@ const App: React.FC = () => {
         )}
         <div className="flex-1 flex flex-col min-w-0 relative">
           {activeToast && (
-            <div className="fixed top-4 right-4 z-[100] w-full max-sm animate-in slide-in-from-right-full duration-300">
-              <div className={`p-4 rounded-2xl shadow-2xl border flex items-start gap-4 ${activeToast.severity === 'urgent' ? 'bg-red-600 text-white' : 'bg-white dark:bg-slate-900 dark:text-white border-slate-200 dark:border-slate-800'}`}>
+            <div className="fixed top-4 right-4 z-[100] w-[320px] animate-in slide-in-from-right-full">
+              <div className={`p-4 rounded-2xl shadow-2xl border flex items-start gap-4 ${activeToast.severity === 'urgent' ? 'bg-red-600 text-white pulse-red' : 'bg-white dark:bg-slate-900 dark:text-white border-slate-200 dark:border-slate-800'}`}>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm">{activeToast.title}</p>
-                  <p className="text-xs opacity-80">{activeToast.message}</p>
+                  <p className="font-black text-[10px] uppercase tracking-widest opacity-70">{activeToast.title}</p>
+                  <p className="text-xs font-bold mt-0.5 line-clamp-2">{activeToast.message}</p>
                 </div>
                 <button onClick={() => setActiveToast(null)}><X size={16} /></button>
               </div>
@@ -206,7 +301,7 @@ const App: React.FC = () => {
           )}
           {currentUser && (
             <Header 
-              user={currentUser} language={language} onToggleLanguage={toggleLanguage}
+              user={currentUser} language={language} onToggleLanguage={() => setLanguage(l => l === 'en' ? 'ar' : 'en')}
               onToggleSidebar={toggleSidebar} searchQuery={searchQuery} onSearchChange={setSearchQuery}
               notifications={notifications} setNotifications={setNotifications} onLogout={handleLogout}
             />

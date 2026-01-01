@@ -20,7 +20,7 @@ interface ChatRoomProps {
 const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessages, setGlobalMessages }) => {
   const t = TRANSLATIONS[language];
   
-  // Discover people who have sent or received messages
+  // Contacts who have communicated with the user
   const activeContacts = useMemo(() => {
     const ids = new Set<string>();
     globalMessages.forEach(m => {
@@ -54,47 +54,58 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
     }
   }, [globalMessages, selectedContact, showListOnMobile]);
 
-  // Mark as read when entering a chat
+  // Sync "Read" status immediately when opening a chat
   useEffect(() => {
+    if (!selectedContact || !isSupabaseConfigured()) return;
+    
     const markAsRead = async () => {
-      if (!selectedContact || !isSupabaseConfigured()) return;
-      
-      const unreadCount = globalMessages.filter(m => 
+      const hasUnread = globalMessages.some(m => 
         m.senderId === selectedContact.id && m.recipientId === user.id && m.status !== 'read'
-      ).length;
+      );
 
-      if (unreadCount > 0) {
+      if (hasUnread) {
         await supabase
           .from('messages')
           .update({ status: 'read' })
           .eq('sender_id', selectedContact.id)
-          .eq('recipient_id', user.id);
-        
-        // App.tsx real-time listener will trigger syncAllData automatically
+          .eq('recipient_id', user.id)
+          .neq('status', 'read');
       }
     };
     markAsRead();
   }, [selectedContact, globalMessages, user.id]);
 
   const handleSend = async () => {
-    if (!input.trim() || !selectedContact) return;
+    if (!input.trim() || !selectedContact || !isSupabaseConfigured()) return;
     const text = input.trim();
     setInput('');
 
-    if (isSupabaseConfigured()) {
-      await supabase.from('messages').insert([{
-        sender_id: user.id,
-        recipient_id: selectedContact.id,
-        sender_name: user.name,
-        text: text,
-        status: 'sent'
-      }]);
+    // Optimistic UI Update
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      senderId: user.id,
+      recipientId: selectedContact.id,
+      senderName: user.name,
+      text: text,
+      status: 'sent',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setGlobalMessages(prev => [...prev, optimisticMsg]);
+
+    const { error } = await supabase.from('messages').insert([{
+      sender_id: user.id,
+      recipient_id: selectedContact.id,
+      sender_name: user.name,
+      text: text,
+      status: 'sent'
+    }]);
+
+    if (error) {
+      alert("Failed to send message. Please check connection.");
+      setGlobalMessages(prev => prev.filter(m => m.id !== tempId));
     }
   };
-
-  const filteredContacts = activeContacts.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
 
   const currentChatMessages = useMemo(() => {
     if (!selectedContact) return [];
@@ -103,6 +114,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
       (m.senderId === selectedContact.id && m.recipientId === user.id)
     );
   }, [globalMessages, selectedContact, user.id]);
+
+  const filteredContacts = activeContacts.filter(c => 
+    c.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="flex h-[calc(100vh-10rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-xl animate-in fade-in duration-300">
@@ -121,7 +136,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input 
               type="text" placeholder="Search team members..." 
-              className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl py-2 pl-9 text-xs outline-none dark:text-white shadow-inner"
+              className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl py-2 pl-9 text-xs outline-none dark:text-white"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -142,7 +157,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
                 <div className="relative shrink-0">
                   <img src={c.avatar} className="w-12 h-12 rounded-full border-2 border-slate-200 dark:border-slate-700" alt="" />
                   {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white dark:border-slate-950 animate-bounce">
+                    <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white dark:border-slate-950">
                       {unreadCount}
                     </span>
                   )}
@@ -161,7 +176,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
           }) : (
             <div className="p-10 text-center opacity-30">
               <Users size={40} className="mx-auto mb-2" />
-              <p className="text-[10px] font-black uppercase">Start a conversation</p>
+              <p className="text-[10px] font-black uppercase tracking-widest">Start a secure link</p>
             </div>
           )}
         </div>
@@ -195,7 +210,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
                 return (
                   <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
                     <div className={`max-w-[75%] p-3 rounded-2xl shadow-sm relative ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-tl-none border border-slate-100 dark:border-slate-700'}`}>
-                      {!isMe && <p className="text-[9px] font-black text-blue-500 uppercase mb-1">{m.senderName}</p>}
                       <p className="text-sm leading-relaxed">{m.text}</p>
                       <div className={`flex items-center justify-end gap-1 mt-1 ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
                         <span className="text-[9px] font-bold">{m.timestamp}</span>
@@ -209,12 +223,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
                   </div>
                 );
               })}
-              {currentChatMessages.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 opacity-20 text-center">
-                  <AlertCircle size={40} className="mb-2" />
-                  <p className="text-xs font-black uppercase tracking-widest">End-to-End Encrypted Link</p>
-                </div>
-              )}
             </div>
 
             <div className="p-4 bg-white dark:bg-slate-900 border-t dark:border-slate-800">
@@ -226,7 +234,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSend()}
                 />
-                <button onClick={handleSend} disabled={!input.trim()} className="p-3 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 disabled:opacity-50 transition-all">
+                <button onClick={handleSend} disabled={!input.trim()} className="p-3 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 disabled:opacity-50 transition-all">
                   <Send size={18} />
                 </button>
               </div>
@@ -236,17 +244,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center opacity-30">
             <MessageSquare size={60} className="mb-4 text-blue-600" />
             <h3 className="text-xl font-black uppercase tracking-tighter dark:text-white">AeroConnect Secure Hub</h3>
-            <p className="text-sm max-w-xs mt-2 font-medium">Historical messages are automatically synced from the secure operations cloud.</p>
+            <p className="text-sm max-w-xs mt-2 font-medium italic">End-to-end encrypted operational intelligence.</p>
           </div>
         )}
       </div>
 
-      {/* Directory Modal */}
+      {/* Team Directory Modal */}
       {isNewChatOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[120] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 bg-black/60 z-[120] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2rem] p-6 shadow-2xl animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black uppercase dark:text-white">Team Directory</h3>
+              <h3 className="text-xl font-black uppercase dark:text-white">New Operational Link</h3>
               <button onClick={() => setIsNewChatOpen(false)}><X className="text-slate-400" /></button>
             </div>
             <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
