@@ -1,0 +1,8 @@
+{
+  "name": "AeroConnect",
+  "description": "A high-performance airport ground operations management system with AI-powered multilingual support, task tracking, and safety reporting.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

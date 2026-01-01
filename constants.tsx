@@ -1,0 +1,92 @@
+
+import React from 'react';
+import { 
+  LayoutDashboard, 
+  ClipboardList, 
+  ShieldAlert, 
+  MessageCircle, 
+  Users, 
+  FileText, 
+  Briefcase,
+  AlertTriangle,
+  MessageSquare,
+  BookOpen,
+  CalendarDays
+} from 'lucide-react';
+
+export const APP_NAME = "AeroConnect";
+
+export const TRANSLATIONS = {
+  en: {
+    dashboard: "Dashboard",
+    tasks: "Task Management",
+    safety: "Report Safety",
+    messages: "Direct Messages",
+    forum: "Staff Forum",
+    admin: "Management",
+    settings: "Settings",
+    logout: "Log Out",
+    welcome: "Welcome back",
+    activeTasks: "Active Tasks",
+    safetyAlerts: "Safety Alerts",
+    weatherStatus: "Weather: Clear - 24°C",
+    assignTask: "Assign New Task",
+    submitReport: "Submit Safety Report",
+    aiAssistant: "AI Support",
+    translating: "Translating...",
+    analyzing: "Analyzing...",
+    docs: "Manuals & Docs",
+    sos: "Report Safety Issue",
+    quickActions: "Quick Actions",
+    changeTheme: "Change Theme",
+    addNewTask: "Add New Task",
+    userManagement: "User Management",
+    leaveRequests: "Leave Requests",
+    safetyReview: "Safety Review",
+    docsManagement: "Docs Management",
+    searchPlaceholder: "Search tasks, flights, staff...",
+    manuals: "Manuals",
+    myleave: "My Leave Status"
+  },
+  ar: {
+    dashboard: "لوحة القيادة",
+    tasks: "إدارة المهام",
+    safety: "إبلاغ سلامة",
+    messages: "الرسائل المباشرة",
+    forum: "منتدى الموظفين",
+    admin: "الإدارة",
+    settings: "الإعدادات",
+    logout: "تسجيل الخروج",
+    welcome: "مرحباً بك مجدداً",
+    activeTasks: "المهام النشطة",
+    safetyAlerts: "تنبيهات السلامة",
+    weatherStatus: "الطقس: صافٍ - 24 درجة مئوية",
+    assignTask: "تعيين مهمة جديدة",
+    submitReport: "تقديم تقرير سلامة",
+    aiAssistant: "دعم الذكاء الاصطناعي",
+    translating: "جاري الترجمة...",
+    analyzing: "جاري التحليل...",
+    docs: "المستندات والأدلة",
+    sos: "إبلاغ عن مشكلة سلامة",
+    quickActions: "إجراءات سريعة",
+    changeTheme: "تغيير المظهر",
+    addNewTask: "إضافة مهمة جديدة",
+    userManagement: "إدارة المستخدمين",
+    leaveRequests: "طلبات الإجازة",
+    safetyReview: "مراجعة السلامة",
+    docsManagement: "إدارة المستندات",
+    searchPlaceholder: "ابحث عن مهام، طائرات، موظفين...",
+    manuals: "الأدلة",
+    myleave: "حالة إجازاتي"
+  }
+};
+
+export const NAVIGATION_ITEMS = [
+  { id: 'dashboard', label: 'dashboard', icon: <LayoutDashboard size={20} /> },
+  { id: 'tasks', label: 'tasks', icon: <ClipboardList size={20} /> },
+  { id: 'manuals', label: 'manuals', icon: <BookOpen size={20} /> },
+  { id: 'my-leave', label: 'myleave', icon: <CalendarDays size={20} /> },
+  { id: 'forum', label: 'forum', icon: <MessageSquare size={20} /> },
+  { id: 'messages', label: 'messages', icon: <MessageCircle size={20} /> },
+  { id: 'admin', label: 'admin', icon: <Briefcase size={20} />, restricted: true },
+];
