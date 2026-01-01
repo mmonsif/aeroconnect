@@ -55,7 +55,7 @@ const App: React.FC = () => {
   const syncAllData = useCallback(async () => {
     if (!isSupabaseConfigured()) return;
 
-    // 1. Fetch Users (Staff List)
+    // 1. Fetch Users
     const { data: userData } = await supabase.from('users').select('*');
     if (userData) setUsers(userData.map(u => ({
       id: u.id, name: u.name, username: u.username, password: u.password,
@@ -66,8 +66,8 @@ const App: React.FC = () => {
     // 2. Fetch Tasks
     const { data: taskData } = await supabase.from('tasks').select('*').order('created_at', { ascending: false });
     if (taskData) setTasks(taskData.map(t => ({
-      id: t.id, title: t.title, description: t.description, assignedTo: t.assigned_to,
-      status: t.status, priority: t.priority, location: t.location, department: t.department,
+      id: t.id, title: t.title, description: t.description || '', assignedTo: t.assigned_to || 'Unassigned',
+      status: t.status, priority: t.priority, location: t.location || 'N/A', department: t.department || 'General',
       createdAt: t.created_at
     })));
 
@@ -102,6 +102,13 @@ const App: React.FC = () => {
         id: r.id, authorName: r.author_name, content: r.content, createdAt: new Date(r.created_at).toLocaleTimeString()
       })) || []
     })));
+
+    // 7. Fetch Messages
+    const { data: messageData } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
+    if (messageData) setGlobalMessages(messageData.map(m => ({
+      id: m.id, senderId: m.sender_id, recipientId: m.recipient_id, senderName: m.sender_name,
+      text: m.text, status: m.status, timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    })));
   }, []);
 
   // Initial Sync
@@ -122,16 +129,24 @@ const App: React.FC = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, syncAllData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_posts' }, syncAllData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_replies' }, syncAllData)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-          const m = payload.new as any;
-          if (m.recipient_id === currentUser.id) {
-            addNotification({ title: `Message from ${m.sender_name}`, message: m.text, type: 'forum', severity: 'info' });
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const m = payload.new as any;
+            if (m.recipient_id === currentUser.id) {
+              addNotification({ title: `New Message`, message: `From ${m.sender_name}`, type: 'forum', severity: 'info' });
+            }
           }
+          syncAllData();
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [currentUser, syncAllData, addNotification]);
+
+  const unreadChatsCount = useMemo(() => {
+    if (!currentUser) return 0;
+    return globalMessages.filter(m => m.recipientId === currentUser.id && m.status !== 'read').length;
+  }, [globalMessages, currentUser]);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
@@ -152,10 +167,7 @@ const App: React.FC = () => {
   const isRTL = language === 'ar';
 
   if (!isLoggedIn && !needsPasswordChange) {
-    // We need users for the login screen. Fetch them if not loaded.
-    if (users.length === 0) {
-      syncAllData();
-    }
+    if (users.length === 0) syncAllData();
     return <Login users={users} onLogin={handleLogin} language={language} />;
   }
 
@@ -177,6 +189,7 @@ const App: React.FC = () => {
           <Sidebar 
             user={currentUser} language={language} isOpen={isSidebarOpen} 
             onClose={() => setIsSidebarOpen(false)} onBroadcast={handleBroadcast}
+            unreadChatsCount={unreadChatsCount}
           />
         )}
         <div className="flex-1 flex flex-col min-w-0 relative">
@@ -202,7 +215,7 @@ const App: React.FC = () => {
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard user={currentUser!} language={language} onToggleTheme={() => {}} data={{ tasks, safetyReports, docs, forumPosts, leaveRequests, users }} searchQuery={searchQuery} setLeaveRequests={setLeaveRequests} />} />
-              <Route path="/tasks" element={<TaskBoard user={currentUser!} language={language} tasks={tasks} setTasks={setTasks} />} />
+              <Route path="/tasks" element={<TaskBoard user={currentUser!} language={language} tasks={tasks} setTasks={setTasks} users={users} />} />
               <Route path="/safety" element={<SafetyBoard user={currentUser!} language={language} reports={safetyReports} setReports={setSafetyReports} />} />
               <Route path="/forum" element={<ForumBoard user={currentUser!} language={language} posts={forumPosts} setPosts={setForumPosts} />} />
               <Route path="/messages" element={<ChatRoom user={currentUser!} language={language} users={users} globalMessages={globalMessages} setGlobalMessages={setGlobalMessages} />} />

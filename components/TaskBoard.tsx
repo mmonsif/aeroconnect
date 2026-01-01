@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Language, Task, UserRole } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { useLocation } from 'react-router-dom';
-import { Plus, MapPin, Clock, X, Edit, Trash2, Play, CheckCircle, User as UserIcon, Briefcase } from 'lucide-react';
+import { Plus, MapPin, X, Edit, Trash2, Play, CheckCircle, User as UserIcon, AlertCircle } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface TaskBoardProps {
@@ -11,17 +11,10 @@ interface TaskBoardProps {
   language: Language;
   tasks: Task[];
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  users: User[];
 }
 
-const ACTIVE_USERS = [
-  { id: 'u1', name: 'Ahmed Al-Farsi', department: 'Operations' },
-  { id: 'u2', name: 'Sara Miller', department: 'Operations' },
-  { id: 'u3', name: 'John Doe', department: 'Maintenance' },
-  { id: 'u4', name: 'Staff X', department: 'Maintenance' },
-  { id: 'u5', name: 'Fatima Zahra', department: 'Security' },
-];
-
-const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks }) => {
+const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, users }) => {
   const t = TRANSLATIONS[language];
   const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -71,7 +64,18 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks }
 
   const handleStatusUpdate = async (id: string, status: Task['status']) => {
     if (!isSupabaseConfigured()) return;
-    await supabase.from('tasks').update({ status }).eq('id', id);
+    
+    // Optimistic Update for instant UI feedback
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
+
+    try {
+      const { error } = await supabase.from('tasks').update({ status }).eq('id', id);
+      if (error) throw error;
+    } catch (err) {
+      console.error("Failed to update task status:", err);
+      alert("Failed to sync task update. Please check your connection.");
+      // Rollback optimistic update if failed (re-fetching from syncAllData in App will handle this eventually)
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -92,8 +96,16 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks }
     setIsModalOpen(true);
   };
 
-  const canModify = (task: Task) => user.role === UserRole.ADMIN || ((user.role === UserRole.MANAGER || user.role === UserRole.SUPERVISOR) && task.department === user.department);
-  const canExecute = (task: Task) => task.assignedTo === user.name;
+  // Managers and Supervisors can modify tasks in their department.
+  const canModify = (task: Task) => 
+    user.role === UserRole.ADMIN || 
+    ((user.role === UserRole.MANAGER || user.role === UserRole.SUPERVISOR) && task.department === user.department);
+
+  // Users can execute tasks assigned to them. Managers can help finish any task in their department.
+  const canExecute = (task: Task) => 
+    task.assignedTo === user.name || 
+    ((user.role === UserRole.MANAGER || user.role === UserRole.SUPERVISOR) && task.department === user.department);
+
   const filteredTasks = tasks.filter(t => filter === 'all' || t.status === filter);
 
   return (
@@ -101,61 +113,91 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks }
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t.tasks}</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Hub Task Management</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Hub Task Management & Execution</p>
         </div>
         {user.role !== UserRole.STAFF && (
-          <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/20"><Plus size={20} />{t.assignTask}</button>
+          <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/20 active:scale-95 transition-all"><Plus size={20} />{t.assignTask}</button>
         )}
       </div>
 
-      <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
+      <div className="flex items-center gap-3 overflow-x-auto pb-2 custom-scrollbar">
         {['all', 'pending', 'in_progress', 'completed', 'blocked'].map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${filter === f ? 'bg-slate-900 text-white dark:bg-white dark:text-black' : 'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-400 border-slate-200 dark:border-slate-800'}`}>{f.toUpperCase()}</button>
+          <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all border ${filter === f ? 'bg-slate-900 text-white dark:bg-white dark:text-black border-transparent' : 'bg-white text-slate-400 dark:bg-slate-900 dark:text-slate-500 border-slate-100 dark:border-slate-800'}`}>{f.replace('_', ' ')}</button>
         ))}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredTasks.map((task) => (
-          <div key={task.id} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm group">
+          <div key={task.id} className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm group hover:shadow-md transition-all">
             <div className="flex items-start justify-between mb-4">
-              <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${task.priority === 'high' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>{task.priority} Priority</span>
+              <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                task.priority === 'critical' ? 'bg-red-600 text-white' : 
+                task.priority === 'high' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'
+              }`}>{task.priority} Priority</span>
+              
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 {canModify(task) && (
-                  <><button onClick={() => handleEdit(task)} className="p-1.5 text-slate-400 hover:text-blue-500"><Edit size={16} /></button>
-                  <button onClick={() => handleDelete(task.id)} className="p-1.5 text-slate-400 hover:text-red-500"><Trash2 size={16} /></button></>
+                  <><button onClick={() => handleEdit(task)} className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors"><Edit size={16} /></button>
+                  <button onClick={() => handleDelete(task.id)} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={16} /></button></>
                 )}
               </div>
             </div>
-            <h4 className="font-bold text-slate-900 dark:text-white mb-2">{task.title}</h4>
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center gap-2 text-xs text-slate-500"><MapPin size={14} /><span>{task.location}</span></div>
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300"><UserIcon size={14} /><span>{task.assignedTo}</span></div>
+
+            <h4 className="font-bold text-slate-900 dark:text-white mb-2 line-clamp-1">{task.title}</h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 line-clamp-2">{task.description || "No specific instructions provided."}</p>
+            
+            <div className="space-y-2 mb-6">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest"><MapPin size={12} /><span>{task.location}</span></div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-blue-500 uppercase tracking-widest"><UserIcon size={12} /><span>{task.assignedTo}</span></div>
             </div>
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+
+            <div className="pt-4 border-t border-slate-50 dark:border-slate-800">
                {canExecute(task) && task.status !== 'completed' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {task.status === 'pending' && <button onClick={() => handleStatusUpdate(task.id, 'in_progress')} className="col-span-2 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold"><Play size={14} className="inline mr-2" /> Start Task</button>}
-                    {task.status === 'in_progress' && <button onClick={() => handleStatusUpdate(task.id, 'completed')} className="col-span-2 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold"><CheckCircle size={14} className="inline mr-2" /> Finish Task</button>}
+                  <div className="flex gap-2">
+                    {task.status === 'pending' && (
+                      <button onClick={() => handleStatusUpdate(task.id, 'in_progress')} className="flex-1 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-blue-500/20"><Play size={14} className="inline mr-2" /> Start</button>
+                    )}
+                    {(task.status === 'in_progress' || task.status === 'blocked') && (
+                      <button onClick={() => handleStatusUpdate(task.id, 'completed')} className="flex-1 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-emerald-500/20"><CheckCircle size={14} className="inline mr-2" /> Finish</button>
+                    )}
+                  </div>
+               )}
+               {task.status === 'completed' && (
+                  <div className="flex items-center justify-center py-2 text-emerald-500 gap-2">
+                    <CheckCircle size={16} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Duty Completed</span>
                   </div>
                )}
             </div>
           </div>
         ))}
+        {filteredTasks.length === 0 && (
+          <div className="col-span-full py-20 text-center opacity-30">
+            <AlertCircle size={48} className="mx-auto mb-4" />
+            <p className="text-sm font-black uppercase tracking-widest">No active tasks in this queue</p>
+          </div>
+        )}
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl">
-            <h2 className="text-xl font-bold dark:text-white mb-6">{editingTask ? 'Edit Task' : 'New Task'}</h2>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
+            <h2 className="text-xl font-black uppercase tracking-tighter dark:text-white mb-6">{editingTask ? 'Modify Hub Duty' : 'New Hub Duty'}</h2>
             <div className="space-y-4">
-              <input type="text" placeholder="Task Title" className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl outline-none border" value={taskForm.title} onChange={e => setTaskForm({...taskForm, title: e.target.value})} />
+              <input type="text" placeholder="Duty Title" className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl outline-none border-none ring-1 ring-slate-100 dark:ring-slate-700 focus:ring-blue-500 dark:text-white" value={taskForm.title} onChange={e => setTaskForm({...taskForm, title: e.target.value})} />
               <div className="grid grid-cols-2 gap-4">
-                <input type="text" placeholder="Location" className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border" value={taskForm.location} onChange={e => setTaskForm({...taskForm, location: e.target.value})} />
-                <select className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border" value={taskForm.priority} onChange={e => setTaskForm({...taskForm, priority: e.target.value as any})}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select>
+                <input type="text" placeholder="Gate/Stand" className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border-none ring-1 ring-slate-100 dark:ring-slate-700 focus:ring-blue-500 dark:text-white" value={taskForm.location} onChange={e => setTaskForm({...taskForm, location: e.target.value})} />
+                <select className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border-none ring-1 ring-slate-100 dark:ring-slate-700 dark:text-white" value={taskForm.priority} onChange={e => setTaskForm({...taskForm, priority: e.target.value as any})}><option value="low">Low Priority</option><option value="medium">Normal</option><option value="high">High</option><option value="critical">Critical</option></select>
               </div>
-              <select className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border" value={taskForm.assignedTo} onChange={e => setTaskForm({...taskForm, assignedTo: e.target.value})}><option value="">Select Staff</option>{ACTIVE_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}</select>
-              <textarea placeholder="Description" className="w-full h-24 bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border" value={taskForm.description} onChange={e => setTaskForm({...taskForm, description: e.target.value})} />
-              <button onClick={handleSaveTask} className="w-full py-3.5 bg-blue-600 text-white font-bold rounded-xl">{editingTask ? 'Save' : 'Create'}</button>
+              <select className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border-none ring-1 ring-slate-100 dark:ring-slate-700 dark:text-white" value={taskForm.assignedTo} onChange={e => setTaskForm({...taskForm, assignedTo: e.target.value})}>
+                <option value="">Auto-Assignment / None</option>
+                {users.map(u => <option key={u.id} value={u.name}>{u.name} ({u.department})</option>)}
+              </select>
+              <textarea placeholder="Specific Instructions..." className="w-full h-24 bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border-none ring-1 ring-slate-100 dark:ring-slate-700 focus:ring-blue-500 dark:text-white resize-none" value={taskForm.description} onChange={e => setTaskForm({...taskForm, description: e.target.value})} />
+              <div className="flex gap-3 pt-2">
+                <button onClick={resetForm} className="flex-1 py-3 text-slate-500 font-bold">Discard</button>
+                <button onClick={handleSaveTask} className="flex-[2] py-4 bg-blue-600 text-white font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-blue-500/20 active:scale-95 transition-all">{editingTask ? 'Update Ops' : 'Initiate Ops'}</button>
+              </div>
             </div>
           </div>
         </div>

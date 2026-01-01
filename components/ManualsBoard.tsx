@@ -10,12 +10,12 @@ import {
   Trash2, 
   X, 
   Download, 
-  ExternalLink,
   UploadCloud,
   FileCheck,
   ShieldCheck,
   Calendar,
-  User as UserIcon
+  User as UserIcon,
+  CheckCircle2
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -83,13 +83,13 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
   };
 
   const handleDownload = (doc: DocFile) => {
-    // Basic text blob for demo since we aren't handling real file storage blobs yet
-    const content = `AeroConnect Secure Document: ${doc.name}\nUploaded By: ${doc.uploadedBy}\nDate: ${doc.date}`;
+    // Improved simulation of file generation for demo purposes
+    const content = `AEROCONNECT SECURE DOCUMENT ACCESS\n\nFilename: ${doc.name}\nType: ${doc.type} MANUAL\nSecurity Level: INTERNAL\nAuthorized for: ${user.name} (${user.staffId})\nDownloaded on: ${new Date().toLocaleString()}\n\n[CONFIDENTIAL DOCUMENT CONTENT HASH: 8f9e2b1c]`;
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = doc.name;
+    a.download = doc.name.replace(/\.[^/.]+$/, "") + ".txt"; // Save as .txt for browser demo
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -237,6 +237,63 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
           </div>
         </div>
       )}
+
+      {viewingDoc && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in">
+           <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl">
+              <div className="p-6 bg-slate-50 dark:bg-slate-800 flex items-center justify-between border-b dark:border-slate-700">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg"><FileText size={24}/></div>
+                  <div>
+                    <h3 className="text-xl font-black uppercase tracking-tighter dark:text-white">{viewingDoc.name}</h3>
+                    <p className="text-xs text-slate-500">Document Meta Analysis • EGY-SOP System</p>
+                  </div>
+                </div>
+                <button onClick={() => setViewingDoc(null)} className="p-2 hover:bg-white rounded-full transition-all"><X size={24} className="text-slate-400"/></button>
+              </div>
+              <div className="p-8 space-y-6">
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                   <MetaItem icon={<ShieldCheck size={14}/>} label="Status" value="Verified" color="emerald"/>
+                   <MetaItem icon={<Calendar size={14}/>} label="Date" value={viewingDoc.date} color="blue"/>
+                   <MetaItem icon={<UserIcon size={14}/>} label="Author" value={viewingDoc.uploadedBy} color="purple"/>
+                   <MetaItem icon={<CheckCircle2 size={14}/>} label="Revision" value="v2.4.1" color="indigo"/>
+                 </div>
+                 <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
+                    <p className="text-sm font-bold dark:text-white mb-2 uppercase tracking-widest text-[10px] text-slate-400">Hub Summary</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed italic">
+                      "This document contains standard operating procedures for airport ground personnel. 
+                      Internal use only. All personnel must strictly adhere to the safety guidelines 
+                      outlined in section 4.2. Failure to comply may result in operational suspension."
+                    </p>
+                 </div>
+                 <div className="flex gap-3">
+                   <button onClick={() => handleDownload(viewingDoc)} className="flex-1 py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all">
+                     <Download size={18}/> Download Full File
+                   </button>
+                   <button onClick={() => setViewingDoc(null)} className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold rounded-2xl active:scale-95 transition-all">
+                     Close Portal
+                   </button>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const MetaItem = ({ icon, label, value, color }: any) => {
+  const colors: any = {
+    emerald: "text-emerald-500 bg-emerald-50 dark:bg-emerald-900/10",
+    blue: "text-blue-500 bg-blue-50 dark:bg-blue-900/10",
+    purple: "text-purple-500 bg-purple-50 dark:bg-purple-900/10",
+    indigo: "text-indigo-500 bg-indigo-50 dark:bg-indigo-900/10",
+  };
+  return (
+    <div className="text-center p-3 rounded-2xl bg-white dark:bg-slate-950 border dark:border-slate-800 shadow-sm">
+      <div className={`mx-auto w-8 h-8 rounded-full flex items-center justify-center mb-1.5 ${colors[color]}`}>{icon}</div>
+      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">{label}</p>
+      <p className="text-[10px] font-bold dark:text-white mt-0.5">{value}</p>
     </div>
   );
 };

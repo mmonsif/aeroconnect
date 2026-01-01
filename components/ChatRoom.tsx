@@ -1,16 +1,13 @@
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { User, Language, ChatMessage } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { 
-  Send, Globe, CheckCheck, Check, Phone, Video, 
-  Search, ChevronLeft, AlertCircle, Languages, 
-  X, Mic, MicOff, VideoOff, PhoneOff, UserPlus, Users,
-  MessageSquare
+  Send, CheckCheck, Check, Phone, Video, 
+  Search, ChevronLeft, AlertCircle, 
+  X, UserPlus, Users, MessageSquare
 } from 'lucide-react';
-import { geminiService } from '../services/gemini';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 
 interface ChatRoomProps {
   user: User;
@@ -48,7 +45,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
-  const [isTranslating, setIsTranslating] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -63,25 +59,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
     const markAsRead = async () => {
       if (!selectedContact || !isSupabaseConfigured()) return;
       
-      const hasUnread = globalMessages.some(m => 
+      const unreadCount = globalMessages.filter(m => 
         m.senderId === selectedContact.id && m.recipientId === user.id && m.status !== 'read'
-      );
+      ).length;
 
-      if (hasUnread) {
+      if (unreadCount > 0) {
         await supabase
           .from('messages')
           .update({ status: 'read' })
-          .match({ sender_id: selectedContact.id, recipient_id: user.id, status: 'sent' });
+          .eq('sender_id', selectedContact.id)
+          .eq('recipient_id', user.id);
         
-        setGlobalMessages(prev => prev.map(m => 
-          (m.senderId === selectedContact.id && m.recipientId === user.id) 
-            ? { ...m, status: 'read' as const } 
-            : m
-        ));
+        // App.tsx real-time listener will trigger syncAllData automatically
       }
     };
     markAsRead();
-  }, [selectedContact, globalMessages, user.id, setGlobalMessages]);
+  }, [selectedContact, globalMessages, user.id]);
 
   const handleSend = async () => {
     if (!input.trim() || !selectedContact) return;
@@ -138,7 +131,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {filteredContacts.length > 0 ? filteredContacts.map(c => {
             const unreadCount = globalMessages.filter(m => m.senderId === c.id && m.recipientId === user.id && m.status !== 'read').length;
-            const lastMsg = globalMessages.filter(m => (m.senderId === c.id || m.recipientId === c.id)).pop();
+            const chatMessages = globalMessages.filter(m => (m.senderId === c.id || m.recipientId === c.id));
+            const lastMsg = chatMessages[chatMessages.length - 1];
             return (
               <div 
                 key={c.id} 
@@ -158,7 +152,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
                     <span className="font-bold text-sm dark:text-white truncate">{c.name}</span>
                     <span className="text-[9px] text-slate-400 font-bold">{lastMsg?.timestamp || ''}</span>
                   </div>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter truncate">{lastMsg?.text || c.department}</p>
+                  <p className={`text-[10px] uppercase tracking-tighter truncate ${unreadCount > 0 ? 'text-blue-600 font-black' : 'text-slate-500 font-bold'}`}>
+                    {lastMsg?.text || c.department}
+                  </p>
                 </div>
               </div>
             );
