@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { UserRole, Language, User, Task, SafetyReport, DocFile, ForumPost, LeaveRequest, AppNotification, ChatMessage } from './types';
 import { TRANSLATIONS } from './constants';
@@ -15,8 +15,7 @@ import ManualsBoard from './components/ManualsBoard';
 import MyLeaveBoard from './components/MyLeaveBoard';
 import Login from './components/Login';
 import ChangePassword from './components/ChangePassword';
-import { Bell, X, AlertCircle, Info, CheckCircle2, Languages, Copy, Check } from 'lucide-react';
-import { geminiService } from './services/gemini';
+import { X } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 const App: React.FC = () => {
@@ -26,174 +25,121 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [activeToast, setActiveToast] = useState<AppNotification | null>(null);
+  
+  // Real-time Synced States
   const [globalMessages, setGlobalMessages] = useState<ChatMessage[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [safetyReports, setSafetyReports] = useState<SafetyReport[]>([]);
+  const [forumPosts, setForumPosts] = useState<ForumPost[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [docs, setDocs] = useState<DocFile[]>([
+    { id: 'D1', name: 'Terminal 3 Emergency Manual.pdf', type: 'PDF', uploadedBy: 'Ahmed', date: '2026-05-15' },
+    { id: 'D2', name: 'Ramp Safety Protocol v2.1.pdf', type: 'PDF', uploadedBy: 'Manager', date: '2026-05-10' }
+  ]);
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
 
-  // Dynamic Org Structure
   const [departments, setDepartments] = useState<string[]>(['Operations', 'Maintenance', 'Security', 'Baggage', 'IT', 'Customer Service']);
   const [availableRoles, setAvailableRoles] = useState<string[]>([
-    UserRole.STAFF, 
-    UserRole.SUPERVISOR, 
-    UserRole.MANAGER, 
-    UserRole.SAFETY_MANAGER, 
-    UserRole.ADMIN
+    UserRole.STAFF, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.SAFETY_MANAGER, UserRole.ADMIN
   ]);
 
+  // Persistent User List (For demo login, would usually be in auth/profiles table)
   const [users, setUsers] = useState<User[]>([
     { id: '1', name: 'Ahmed Al-Farsi', username: 'ahmed_ops', role: UserRole.ADMIN, staffId: 'STAFF-EGY-992', avatar: 'https://picsum.photos/seed/staff1/200/200', department: 'Operations', status: 'active', password: 'admin' },
     { id: '2', name: 'Sara Miller', username: 'sara_ground', role: UserRole.STAFF, staffId: 'STAFF-EGY-104', avatar: 'https://picsum.photos/seed/staff2/200/200', department: 'Operations', status: 'active', password: '123', mustChangePassword: true },
     { id: '3', name: 'John Doe', username: 'john_manager', role: UserRole.MANAGER, staffId: 'STAFF-EGY-112', avatar: 'https://picsum.photos/seed/staff3/200/200', department: 'Maintenance', status: 'active', password: '123', mustChangePassword: true }
   ]);
 
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: 'T1', title: 'Baggage Loading - EK201', description: 'Manual loading required at Gate A1.', assignedTo: 'Ahmed Al-Farsi', status: 'in_progress', priority: 'high', location: 'Gate A1', createdAt: new Date().toISOString(), department: 'Operations' },
-    { id: 'T2', title: 'Fueling Check - QR102', description: 'Standard fueling procedure.', assignedTo: 'John Doe', status: 'pending', priority: 'medium', location: 'Stand 42', createdAt: new Date().toISOString(), department: 'Maintenance' },
-  ]);
-
-  const [safetyReports, setSafetyReports] = useState<SafetyReport[]>([
-    { id: 'R1', reporterId: '1', type: 'hazard', description: 'Fuel spill near Stand 4', severity: 'high', status: 'open', timestamp: '1h ago' }
-  ]);
-
-  const [docs, setDocs] = useState<DocFile[]>([
-    { id: 'D1', name: 'Terminal 3 Emergency Manual.pdf', type: 'PDF', uploadedBy: 'Ahmed', date: '2026-05-15' },
-    { id: 'D2', name: 'Ramp Safety Protocol v2.1.pdf', type: 'PDF', uploadedBy: 'Manager', date: '2026-05-10' }
-  ]);
-
-  const [forumPosts, setForumPosts] = useState<ForumPost[]>([
-    {
-      id: 'f1',
-      authorId: '1',
-      authorName: 'Admin',
-      title: 'New Safety Protocols for Ramp Operations',
-      content: 'Please review the updated guidelines for ramp activities effective June 1st.',
-      createdAt: '2 hours ago',
-      replies: [
-        { id: 'r1', authorName: 'Staff X', content: 'Will there be a training session?', createdAt: '1 hour ago' }
-      ]
-    }
-  ]);
-
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([
-    { id: 'L1', staffId: 'STAFF-EGY-104', staffName: 'Sara Miller', type: 'annual', startDate: '2026-06-01', endDate: '2026-06-15', status: 'pending', reason: 'Vacation' },
-    { id: 'L2', staffId: 'STAFF-EGY-112', staffName: 'John Doe', type: 'sick', startDate: '2026-05-20', endDate: '2026-05-22', status: 'approved', reason: 'Medical appointment' }
-  ]);
-
-  const t = useMemo(() => TRANSLATIONS[language], [language]);
-  const isRTL = language === 'ar';
-
   const addNotification = useCallback((notif: Omit<AppNotification, 'id' | 'timestamp' | 'isRead'>) => {
-    const newNotif: AppNotification = {
-      ...notif,
-      id: `n-${Date.now()}`,
-      timestamp: new Date(),
-      isRead: false
-    };
+    const newNotif: AppNotification = { ...notif, id: `n-${Date.now()}`, timestamp: new Date(), isRead: false };
     setNotifications(prev => [newNotif, ...prev]);
     setActiveToast(newNotif);
     setTimeout(() => setActiveToast(current => current?.id === newNotif.id ? null : current), 5000);
   }, []);
 
-  // Sync historical messages from Supabase
-  const syncMessageHistory = useCallback(async (userId: string) => {
+  // MASTER DATA SYNC
+  const syncAllData = useCallback(async () => {
     if (!isSupabaseConfigured()) return;
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
-      .order('created_at', { ascending: true });
 
-    if (data) {
-      setGlobalMessages(data.map((m: any) => ({
-        id: m.id,
-        senderId: m.sender_id,
-        recipientId: m.recipient_id,
-        senderName: m.sender_name,
-        text: m.text,
-        timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: m.status || 'sent'
-      })));
-    }
+    // 1. Fetch Tasks
+    const { data: taskData } = await supabase.from('tasks').select('*').order('created_at', { ascending: false });
+    if (taskData) setTasks(taskData.map(t => ({
+      id: t.id, title: t.title, description: t.description, assignedTo: t.assigned_to,
+      status: t.status, priority: t.priority, location: t.location, department: t.department,
+      createdAt: t.created_at
+    })));
+
+    // 2. Fetch Safety Reports
+    const { data: safetyData } = await supabase.from('safety_reports').select('*').order('created_at', { ascending: false });
+    if (safetyData) setSafetyReports(safetyData.map(r => ({
+      id: r.id, reporterId: r.reporter_id, type: r.type, description: r.description,
+      severity: r.severity, status: r.status, aiAnalysis: r.ai_analysis, entities: r.entities,
+      timestamp: new Date(r.created_at).toLocaleTimeString()
+    })));
+
+    // 3. Fetch Leave Requests
+    const { data: leaveData } = await supabase.from('leave_requests').select('*').order('created_at', { ascending: false });
+    if (leaveData) setLeaveRequests(leaveData.map(l => ({
+      id: l.id, staffId: l.staff_id, staffName: l.staff_name, type: l.type,
+      startDate: l.start_date, endDate: l.end_date, status: l.status, reason: l.reason,
+      suggestion: l.suggestion, suggestedStartDate: l.suggested_start_date, suggestedEndDate: l.suggested_end_date
+    })));
+
+    // 4. Fetch Forum Posts (including replies)
+    const { data: postsData } = await supabase.from('forum_posts').select('*, forum_replies(*)').order('created_at', { ascending: false });
+    if (postsData) setForumPosts(postsData.map(p => ({
+      id: p.id, authorId: p.author_id, authorName: p.author_name, title: p.title, content: p.content,
+      createdAt: new Date(p.created_at).toLocaleTimeString(),
+      replies: p.forum_replies?.map((r: any) => ({
+        id: r.id, authorName: r.author_name, content: r.content, createdAt: new Date(r.created_at).toLocaleTimeString()
+      })) || []
+    })));
   }, []);
 
-  // Setup real-time listener for messages
+  // REALTIME SUBSCRIPTIONS
   useEffect(() => {
     if (!currentUser || !isSupabaseConfigured()) return;
 
-    syncMessageHistory(currentUser.id);
+    syncAllData();
 
     const channel = supabase
-      .channel(`chat-updates-${currentUser.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
+      .channel('app-global-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, syncAllData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'safety_reports' }, syncAllData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, syncAllData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_posts' }, syncAllData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_replies' }, syncAllData)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
           const m = payload.new as any;
-          if (m.sender_id === currentUser.id || m.recipient_id === currentUser.id) {
-            setGlobalMessages(prev => {
-              if (prev.some(msg => msg.id === m.id)) return prev;
-              const newMsg: ChatMessage = {
-                id: m.id,
-                senderId: m.sender_id,
-                recipientId: m.recipient_id,
-                senderName: m.sender_name,
-                text: m.text,
-                timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                status: m.status || 'sent'
-              };
-              return [...prev, newMsg];
-            });
-
-            if (m.recipient_id === currentUser.id) {
-              addNotification({
-                title: `Message from ${m.sender_name}`,
-                message: m.text,
-                type: 'forum',
-                severity: 'info'
-              });
-            }
+          if (m.recipient_id === currentUser.id) {
+            addNotification({ title: `Message from ${m.sender_name}`, message: m.text, type: 'forum', severity: 'info' });
           }
-        } else if (payload.eventType === 'UPDATE') {
-          const updated = payload.new as any;
-          setGlobalMessages(prev => prev.map(m => 
-            m.id === updated.id ? { ...m, status: updated.status } : m
-          ));
-        }
       })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUser, syncMessageHistory, addNotification]);
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUser, syncAllData, addNotification]);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    if (user.mustChangePassword) {
-      setNeedsPasswordChange(true);
-    } else {
-      setIsLoggedIn(true);
-    }
+    if (user.mustChangePassword) { setNeedsPasswordChange(true); } else { setIsLoggedIn(true); }
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setCurrentUser(null);
-    setNeedsPasswordChange(false);
-    setGlobalMessages([]);
   };
 
   const toggleLanguage = () => setLanguage(prev => prev === 'en' ? 'ar' : 'en');
-  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
   const toggleSidebar = () => setIsSidebarOpen(prev => !prev);
   const handleBroadcast = (message: string) => {
     addNotification({ title: 'BROADCAST', message, type: 'safety', severity: 'urgent' });
   };
 
-  const unreadMessagesCount = useMemo(() => {
-    if (!currentUser) return 0;
-    return globalMessages.filter(m => m.recipientId === currentUser.id && m.status !== 'read').length;
-  }, [globalMessages, currentUser]);
+  const isRTL = language === 'ar';
 
   if (!isLoggedIn && !needsPasswordChange) {
     return <Login users={users} onLogin={handleLogin} language={language} />;
@@ -213,17 +159,13 @@ const App: React.FC = () => {
       <div className={`min-h-screen bg-slate-50 dark:bg-slate-950 flex transition-all duration-300 ${isRTL ? 'font-arabic' : ''}`}>
         {currentUser && (
           <Sidebar 
-            user={currentUser} 
-            language={language} 
-            isOpen={isSidebarOpen} 
-            onClose={() => setIsSidebarOpen(false)} 
-            onBroadcast={handleBroadcast}
-            unreadChatsCount={unreadMessagesCount}
+            user={currentUser} language={language} isOpen={isSidebarOpen} 
+            onClose={() => setIsSidebarOpen(false)} onBroadcast={handleBroadcast}
           />
         )}
         <div className="flex-1 flex flex-col min-w-0 relative">
           {activeToast && (
-            <div className={`fixed top-4 right-4 z-[100] w-full max-sm animate-in slide-in-from-right-full duration-300 ${isRTL ? 'right-auto left-4' : 'right-4'}`}>
+            <div className="fixed top-4 right-4 z-[100] w-full max-sm animate-in slide-in-from-right-full duration-300">
               <div className={`p-4 rounded-2xl shadow-2xl border flex items-start gap-4 ${activeToast.severity === 'urgent' ? 'bg-red-600 text-white' : 'bg-white dark:bg-slate-900 dark:text-white border-slate-200 dark:border-slate-800'}`}>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-sm">{activeToast.title}</p>
@@ -235,21 +177,15 @@ const App: React.FC = () => {
           )}
           {currentUser && (
             <Header 
-              user={currentUser} 
-              language={language} 
-              onToggleLanguage={toggleLanguage}
-              onToggleSidebar={toggleSidebar}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              notifications={notifications}
-              setNotifications={setNotifications}
-              onLogout={handleLogout}
+              user={currentUser} language={language} onToggleLanguage={toggleLanguage}
+              onToggleSidebar={toggleSidebar} searchQuery={searchQuery} onSearchChange={setSearchQuery}
+              notifications={notifications} setNotifications={setNotifications} onLogout={handleLogout}
             />
           )}
           <main className="flex-1 p-4 md:p-6 overflow-y-auto">
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard user={currentUser!} language={language} onToggleTheme={toggleTheme} data={{ tasks, safetyReports, docs, forumPosts, leaveRequests, users }} searchQuery={searchQuery} setLeaveRequests={setLeaveRequests} />} />
+              <Route path="/dashboard" element={<Dashboard user={currentUser!} language={language} onToggleTheme={() => {}} data={{ tasks, safetyReports, docs, forumPosts, leaveRequests, users }} searchQuery={searchQuery} setLeaveRequests={setLeaveRequests} />} />
               <Route path="/tasks" element={<TaskBoard user={currentUser!} language={language} tasks={tasks} setTasks={setTasks} />} />
               <Route path="/safety" element={<SafetyBoard user={currentUser!} language={language} reports={safetyReports} setReports={setSafetyReports} />} />
               <Route path="/forum" element={<ForumBoard user={currentUser!} language={language} posts={forumPosts} setPosts={setForumPosts} />} />
