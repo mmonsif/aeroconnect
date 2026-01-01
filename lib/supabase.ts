@@ -1,20 +1,18 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = (window as any)._env_?.SUPABASE_URL || '';
-const supabaseAnonKey = (window as any)._env_?.SUPABASE_ANON_KEY || '';
+const supabaseUrl = 'https://vmteubfpwuiwzbncbikb.supabase.co';
+const supabaseAnonKey = 'sb_publishable_sjhzB9wzTsjzBAI3t-zKJw_7Y5vcDcC';
 
 // A helper to check if the Supabase client is likely to work
+// Using .length to avoid "types have no overlap" comparison errors with specific string literals
 export const isSupabaseConfigured = () => {
-  return supabaseUrl !== '' && 
-         supabaseAnonKey !== '' && 
+  return supabaseUrl.length > 0 && 
+         supabaseAnonKey.length > 0 && 
          !supabaseUrl.includes('your-project-url');
 };
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co', 
-  supabaseAnonKey || 'placeholder'
-);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 /**
  * DATABASE SCHEMA REQUIREMENTS:

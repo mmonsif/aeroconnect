@@ -20,49 +20,10 @@ interface ChatRoomProps {
   setGlobalMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
 }
 
-// Audio Decoding helpers
-function decode(base64: string) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function encode(bytes: Uint8Array) {
-  let binary = '';
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-async function decodeAudioData(
-  data: Uint8Array,
-  ctx: AudioContext,
-  sampleRate: number,
-  numChannels: number,
-): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-    }
-  }
-  return buffer;
-}
-
 const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessages, setGlobalMessages }) => {
   const t = TRANSLATIONS[language];
   
-  // Dynamic Discovery: People who talked to us or we talked to
+  // Discover people who have sent or received messages
   const activeContacts = useMemo(() => {
     const ids = new Set<string>();
     globalMessages.forEach(m => {
@@ -91,35 +52,27 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-select first if none selected and on desktop
-  useEffect(() => {
-    if (!selectedContact && activeContacts.length > 0 && window.innerWidth > 768) {
-      setSelectedContact(activeContacts[0]);
-    }
-  }, [activeContacts, selectedContact]);
-
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [globalMessages, selectedContact]);
+  }, [globalMessages, selectedContact, showListOnMobile]);
 
-  // Read Receipts: Mark as read in Supabase when we view the chat
+  // Mark as read when entering a chat
   useEffect(() => {
     const markAsRead = async () => {
       if (!selectedContact || !isSupabaseConfigured()) return;
       
-      const unreadFromThisUser = globalMessages.some(m => 
+      const hasUnread = globalMessages.some(m => 
         m.senderId === selectedContact.id && m.recipientId === user.id && m.status !== 'read'
       );
 
-      if (unreadFromThisUser) {
+      if (hasUnread) {
         await supabase
           .from('messages')
           .update({ status: 'read' })
           .match({ sender_id: selectedContact.id, recipient_id: user.id, status: 'sent' });
         
-        // Local state update
         setGlobalMessages(prev => prev.map(m => 
           (m.senderId === selectedContact.id && m.recipientId === user.id) 
             ? { ...m, status: 'read' as const } 
@@ -132,7 +85,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
 
   const handleSend = async () => {
     if (!input.trim() || !selectedContact) return;
-    const text = input;
+    const text = input.trim();
     setInput('');
 
     if (isSupabaseConfigured()) {
@@ -161,8 +114,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
   return (
     <div className="flex h-[calc(100vh-10rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-xl animate-in fade-in duration-300">
       
-      {/* Sidebar (List) */}
-      <div className={`w-full md:w-80 flex flex-col border-r border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 ${!showListOnMobile ? 'hidden md:flex' : 'flex'}`}>
+      {/* Sidebar (Chat List) */}
+      <div className={`${showListOnMobile ? 'w-full' : 'hidden'} md:w-80 md:flex flex-col border-r border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950`}>
         <div className="p-4 border-b dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
           <h2 className="text-xl font-black uppercase tracking-tighter dark:text-white">Ops Link</h2>
           <button onClick={() => setIsNewChatOpen(true)} className="p-2 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all">
@@ -192,7 +145,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
                 onClick={() => { setSelectedContact(c); setShowListOnMobile(false); }}
                 className={`flex items-center gap-3 p-4 cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-colors border-b dark:border-slate-800/50 ${selectedContact?.id === c.id ? 'bg-white dark:bg-slate-800 border-r-4 border-blue-500' : ''}`}
               >
-                <div className="relative">
+                <div className="relative shrink-0">
                   <img src={c.avatar} className="w-12 h-12 rounded-full border-2 border-slate-200 dark:border-slate-700" alt="" />
                   {unreadCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white dark:border-slate-950 animate-bounce">
@@ -205,21 +158,21 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
                     <span className="font-bold text-sm dark:text-white truncate">{c.name}</span>
                     <span className="text-[9px] text-slate-400 font-bold">{lastMsg?.timestamp || ''}</span>
                   </div>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter truncate">{c.department}</p>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter truncate">{lastMsg?.text || c.department}</p>
                 </div>
               </div>
             );
           }) : (
             <div className="p-10 text-center opacity-30">
               <Users size={40} className="mx-auto mb-2" />
-              <p className="text-[10px] font-black uppercase">No active chats</p>
+              <p className="text-[10px] font-black uppercase">Start a conversation</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 ${showListOnMobile ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`${!showListOnMobile ? 'w-full' : 'hidden'} md:flex md:flex-1 flex flex-col bg-slate-50 dark:bg-slate-950`}>
         {selectedContact ? (
           <>
             <div className="p-4 border-b dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
@@ -269,9 +222,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
             </div>
 
             <div className="p-4 bg-white dark:bg-slate-900 border-t dark:border-slate-800">
-              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-2xl ring-1 ring-slate-100 dark:ring-slate-700">
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-2xl ring-1 ring-slate-100 dark:ring-slate-700 focus-within:ring-blue-500 transition-all">
                 <input 
-                  type="text" placeholder="Type secure operational message..." 
+                  type="text" placeholder="Type secure message..." 
                   className="flex-1 bg-transparent border-none outline-none text-sm px-3 dark:text-white"
                   value={input}
                   onChange={e => setInput(e.target.value)}

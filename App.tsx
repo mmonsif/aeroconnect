@@ -32,12 +32,7 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
 
-  const [selection, setSelection] = useState<{ text: string, x: number, y: number } | null>(null);
-  const [translatedText, setTranslatedText] = useState<string | null>(null);
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const translationRef = useRef<HTMLDivElement>(null);
-
+  // Dynamic Org Structure
   const [departments, setDepartments] = useState<string[]>(['Operations', 'Maintenance', 'Security', 'Baggage', 'IT', 'Customer Service']);
   const [availableRoles, setAvailableRoles] = useState<string[]>([
     UserRole.STAFF, 
@@ -101,7 +96,7 @@ const App: React.FC = () => {
     setTimeout(() => setActiveToast(current => current?.id === newNotif.id ? null : current), 5000);
   }, []);
 
-  // CRITICAL: Fetch existing messages for the current user from Supabase
+  // Sync historical messages from Supabase
   const syncMessageHistory = useCallback(async (userId: string) => {
     if (!isSupabaseConfigured()) return;
     const { data, error } = await supabase
@@ -123,16 +118,14 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Real-time listener setup
+  // Setup real-time listener for messages
   useEffect(() => {
     if (!currentUser || !isSupabaseConfigured()) return;
 
-    // Load history once
     syncMessageHistory(currentUser.id);
 
-    // Listen for new messages or status updates
     const channel = supabase
-      .channel(`user-messages-${currentUser.id}`)
+      .channel(`chat-updates-${currentUser.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const m = payload.new as any;
@@ -151,10 +144,9 @@ const App: React.FC = () => {
               return [...prev, newMsg];
             });
 
-            // Browser notification if we are the recipient
             if (m.recipient_id === currentUser.id) {
               addNotification({
-                title: `New message from ${m.sender_name}`,
+                title: `Message from ${m.sender_name}`,
                 message: m.text,
                 type: 'forum',
                 severity: 'info'
