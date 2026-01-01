@@ -32,10 +32,8 @@ const App: React.FC = () => {
   const [safetyReports, setSafetyReports] = useState<SafetyReport[]>([]);
   const [forumPosts, setForumPosts] = useState<ForumPost[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
-  const [docs, setDocs] = useState<DocFile[]>([
-    { id: 'D1', name: 'Terminal 3 Emergency Manual.pdf', type: 'PDF', uploadedBy: 'Ahmed', date: '2026-05-15' },
-    { id: 'D2', name: 'Ramp Safety Protocol v2.1.pdf', type: 'PDF', uploadedBy: 'Manager', date: '2026-05-10' }
-  ]);
+  const [docs, setDocs] = useState<DocFile[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -44,13 +42,6 @@ const App: React.FC = () => {
   const [departments, setDepartments] = useState<string[]>(['Operations', 'Maintenance', 'Security', 'Baggage', 'IT', 'Customer Service']);
   const [availableRoles, setAvailableRoles] = useState<string[]>([
     UserRole.STAFF, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.SAFETY_MANAGER, UserRole.ADMIN
-  ]);
-
-  // Persistent User List (For demo login, would usually be in auth/profiles table)
-  const [users, setUsers] = useState<User[]>([
-    { id: '1', name: 'Ahmed Al-Farsi', username: 'ahmed_ops', role: UserRole.ADMIN, staffId: 'STAFF-EGY-992', avatar: 'https://picsum.photos/seed/staff1/200/200', department: 'Operations', status: 'active', password: 'admin' },
-    { id: '2', name: 'Sara Miller', username: 'sara_ground', role: UserRole.STAFF, staffId: 'STAFF-EGY-104', avatar: 'https://picsum.photos/seed/staff2/200/200', department: 'Operations', status: 'active', password: '123', mustChangePassword: true },
-    { id: '3', name: 'John Doe', username: 'john_manager', role: UserRole.MANAGER, staffId: 'STAFF-EGY-112', avatar: 'https://picsum.photos/seed/staff3/200/200', department: 'Maintenance', status: 'active', password: '123', mustChangePassword: true }
   ]);
 
   const addNotification = useCallback((notif: Omit<AppNotification, 'id' | 'timestamp' | 'isRead'>) => {
@@ -64,7 +55,15 @@ const App: React.FC = () => {
   const syncAllData = useCallback(async () => {
     if (!isSupabaseConfigured()) return;
 
-    // 1. Fetch Tasks
+    // 1. Fetch Users (Staff List)
+    const { data: userData } = await supabase.from('users').select('*');
+    if (userData) setUsers(userData.map(u => ({
+      id: u.id, name: u.name, username: u.username, password: u.password,
+      role: u.role as UserRole, staffId: u.staff_id, avatar: u.avatar || `https://picsum.photos/seed/${u.id}/200/200`,
+      department: u.department, status: u.status, mustChangePassword: u.must_change_password
+    })));
+
+    // 2. Fetch Tasks
     const { data: taskData } = await supabase.from('tasks').select('*').order('created_at', { ascending: false });
     if (taskData) setTasks(taskData.map(t => ({
       id: t.id, title: t.title, description: t.description, assignedTo: t.assigned_to,
@@ -72,7 +71,13 @@ const App: React.FC = () => {
       createdAt: t.created_at
     })));
 
-    // 2. Fetch Safety Reports
+    // 3. Fetch Documents
+    const { data: docData } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
+    if (docData) setDocs(docData.map(d => ({
+      id: d.id, name: d.name, type: d.type, uploadedBy: d.uploaded_by, date: new Date(d.created_at).toISOString().split('T')[0]
+    })));
+
+    // 4. Fetch Safety Reports
     const { data: safetyData } = await supabase.from('safety_reports').select('*').order('created_at', { ascending: false });
     if (safetyData) setSafetyReports(safetyData.map(r => ({
       id: r.id, reporterId: r.reporter_id, type: r.type, description: r.description,
@@ -80,7 +85,7 @@ const App: React.FC = () => {
       timestamp: new Date(r.created_at).toLocaleTimeString()
     })));
 
-    // 3. Fetch Leave Requests
+    // 5. Fetch Leave Requests
     const { data: leaveData } = await supabase.from('leave_requests').select('*').order('created_at', { ascending: false });
     if (leaveData) setLeaveRequests(leaveData.map(l => ({
       id: l.id, staffId: l.staff_id, staffName: l.staff_name, type: l.type,
@@ -88,7 +93,7 @@ const App: React.FC = () => {
       suggestion: l.suggestion, suggestedStartDate: l.suggested_start_date, suggestedEndDate: l.suggested_end_date
     })));
 
-    // 4. Fetch Forum Posts (including replies)
+    // 6. Fetch Forum Posts
     const { data: postsData } = await supabase.from('forum_posts').select('*, forum_replies(*)').order('created_at', { ascending: false });
     if (postsData) setForumPosts(postsData.map(p => ({
       id: p.id, authorId: p.author_id, authorName: p.author_name, title: p.title, content: p.content,
@@ -99,14 +104,19 @@ const App: React.FC = () => {
     })));
   }, []);
 
+  // Initial Sync
+  useEffect(() => {
+    syncAllData();
+  }, [syncAllData]);
+
   // REALTIME SUBSCRIPTIONS
   useEffect(() => {
     if (!currentUser || !isSupabaseConfigured()) return;
 
-    syncAllData();
-
     const channel = supabase
       .channel('app-global-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, syncAllData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, syncAllData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, syncAllData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'safety_reports' }, syncAllData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, syncAllData)
@@ -142,15 +152,21 @@ const App: React.FC = () => {
   const isRTL = language === 'ar';
 
   if (!isLoggedIn && !needsPasswordChange) {
+    // We need users for the login screen. Fetch them if not loaded.
+    if (users.length === 0) {
+      syncAllData();
+    }
     return <Login users={users} onLogin={handleLogin} language={language} />;
   }
 
   if (needsPasswordChange) {
-    return <ChangePassword onComplete={(p) => { 
-      setUsers(prev => prev.map(u => u.id === currentUser?.id ? { ...u, password: p, mustChangePassword: false } : u));
-      setCurrentUser(curr => curr ? { ...curr, mustChangePassword: false } : null);
-      setNeedsPasswordChange(false);
-      setIsLoggedIn(true);
+    return <ChangePassword onComplete={async (p) => { 
+      if (currentUser) {
+        await supabase.from('users').update({ password: p, must_change_password: false }).eq('id', currentUser.id);
+        setCurrentUser(curr => curr ? { ...curr, mustChangePassword: false } : null);
+        setNeedsPasswordChange(false);
+        setIsLoggedIn(true);
+      }
     }} language={language} />;
   }
 
