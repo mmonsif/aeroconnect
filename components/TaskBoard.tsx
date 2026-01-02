@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Language, Task, UserRole } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { useLocation } from 'react-router-dom';
-import { Plus, MapPin, X, Edit, Trash2, Play, CheckCircle, User as UserIcon, AlertCircle } from 'lucide-react';
+import { Plus, MapPin, X, Edit, Trash2, Play, CheckCircle, User as UserIcon, AlertCircle, Activity } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface TaskBoardProps {
@@ -65,7 +65,6 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
   const handleStatusUpdate = async (id: string, status: Task['status']) => {
     if (!isSupabaseConfigured()) return;
     
-    // Optimistic Update for instant UI feedback
     setTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
 
     try {
@@ -74,7 +73,6 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
     } catch (err) {
       console.error("Failed to update task status:", err);
       alert("Failed to sync task update. Please check your connection.");
-      // Rollback optimistic update if failed (re-fetching from syncAllData in App will handle this eventually)
     }
   };
 
@@ -96,17 +94,24 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
     setIsModalOpen(true);
   };
 
-  // Managers and Supervisors can modify tasks in their department.
   const canModify = (task: Task) => 
     user.role === UserRole.ADMIN || 
     ((user.role === UserRole.MANAGER || user.role === UserRole.SUPERVISOR) && task.department === user.department);
 
-  // Users can execute tasks assigned to them. Managers can help finish any task in their department.
   const canExecute = (task: Task) => 
     task.assignedTo === user.name || 
     ((user.role === UserRole.MANAGER || user.role === UserRole.SUPERVISOR) && task.department === user.department);
 
   const filteredTasks = tasks.filter(t => filter === 'all' || t.status === filter);
+
+  const getStatusColor = (status: Task['status']) => {
+    switch(status) {
+      case 'in_progress': return 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]';
+      case 'completed': return 'bg-emerald-500 text-white';
+      case 'blocked': return 'bg-red-500 text-white';
+      default: return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -130,10 +135,18 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
         {filteredTasks.map((task) => (
           <div key={task.id} className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm group hover:shadow-md transition-all">
             <div className="flex items-start justify-between mb-4">
-              <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
-                task.priority === 'critical' ? 'bg-red-600 text-white' : 
-                task.priority === 'high' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'
-              }`}>{task.priority} Priority</span>
+              <div className="flex flex-col gap-2">
+                <span className={`w-fit px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                  task.priority === 'critical' ? 'bg-red-600 text-white' : 
+                  task.priority === 'high' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'
+                }`}>{task.priority} Priority</span>
+                
+                {/* Status Badge - VISIBILITY IMPROVEMENT */}
+                <span className={`w-fit px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 ${getStatusColor(task.status)}`}>
+                  {task.status === 'in_progress' && <Activity size={10} className="animate-pulse"/>}
+                  {task.status.replace('_', ' ')}
+                </span>
+              </div>
               
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 {canModify(task) && (
@@ -155,10 +168,10 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
                {canExecute(task) && task.status !== 'completed' && (
                   <div className="flex gap-2">
                     {task.status === 'pending' && (
-                      <button onClick={() => handleStatusUpdate(task.id, 'in_progress')} className="flex-1 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-blue-500/20"><Play size={14} className="inline mr-2" /> Start</button>
+                      <button onClick={() => handleStatusUpdate(task.id, 'in_progress')} className="flex-1 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-blue-500/20"><Play size={14} className="inline mr-2" /> Start Duty</button>
                     )}
                     {(task.status === 'in_progress' || task.status === 'blocked') && (
-                      <button onClick={() => handleStatusUpdate(task.id, 'completed')} className="flex-1 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-emerald-500/20"><CheckCircle size={14} className="inline mr-2" /> Finish</button>
+                      <button onClick={() => handleStatusUpdate(task.id, 'completed')} className="flex-1 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-emerald-500/20"><CheckCircle size={14} className="inline mr-2" /> Finish Duty</button>
                     )}
                   </div>
                )}

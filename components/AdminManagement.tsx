@@ -23,7 +23,9 @@ import {
   Briefcase,
   Layers,
   ChevronRight,
-  ShieldPlus
+  ShieldPlus,
+  GitGraph,
+  UserCheck
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -88,7 +90,7 @@ const AdminManagement: React.FC<AdminManagementProps> = ({
         {activeTab === 'users' && <UserManagement users={data.users} setUsers={setUsers} departments={data.departments} roles={data.roles} isAdmin={user.role === UserRole.ADMIN} />}
         {activeTab === 'leave' && <LeaveManagementForm currentUser={user} requests={data.leaveRequests} setRequests={setLeaveRequests} language={language} />}
         {activeTab === 'safety' && <SafetyReview reports={data.safetyReports} setReports={setSafetyReports} />}
-        {activeTab === 'org' && <OrgStructureManagement departments={data.departments} roles={data.roles} setDepartments={setDepartments} setRoles={setRoles} />}
+        {activeTab === 'org' && <OrgStructureManagement users={data.users} departments={data.departments} roles={data.roles} setDepartments={setDepartments} setRoles={setRoles} />}
       </div>
     </div>
   );
@@ -301,9 +303,10 @@ const UserManagement = ({ users, setUsers, departments, roles, isAdmin }: { user
   );
 };
 
-const OrgStructureManagement = ({ departments, roles, setDepartments, setRoles }: { departments: string[], roles: string[], setDepartments: any, setRoles: any }) => {
+const OrgStructureManagement = ({ users, departments, roles, setDepartments, setRoles }: { users: User[], departments: string[], roles: string[], setDepartments: any, setRoles: any }) => {
   const [newDept, setNewDept] = useState('');
   const [newRole, setNewRole] = useState('');
+  const [subTab, setSubTab] = useState<'depts' | 'hierarchy'>('depts');
 
   const addDept = () => {
     if (newDept.trim() && !departments.includes(newDept)) {
@@ -334,53 +337,107 @@ const OrgStructureManagement = ({ departments, roles, setDepartments, setRoles }
     setRoles(roles.filter(r => r !== role));
   };
 
+  const handleUpdateManager = async (staffId: string, managerId: string) => {
+    if (!isSupabaseConfigured()) return;
+    await supabase.from('users').update({ manager_id: managerId }).eq('id', staffId);
+  };
+
   return (
-    <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-12">
-      <div className="space-y-6">
-        <h3 className="text-xl font-bold dark:text-white">Departments</h3>
-        <div className="flex gap-2">
-          <input 
-            type="text" 
-            placeholder="New Department" 
-            className="flex-1 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border text-sm dark:text-white"
-            value={newDept}
-            onChange={e => setNewDept(e.target.value)}
-          />
-          <button onClick={addDept} className="p-3 bg-slate-900 text-white rounded-xl"><Plus size={20}/></button>
-        </div>
-        <div className="grid grid-cols-1 gap-2">
-          {departments.map(dept => (
-            <div key={dept} className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 rounded-2xl">
-              <span className="text-sm font-bold dark:text-slate-300">{dept}</span>
-              <button onClick={() => removeDept(dept)} className="p-1.5 text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
-            </div>
-          ))}
-        </div>
+    <div className="p-0">
+      <div className="flex border-b dark:border-slate-800">
+        <button onClick={() => setSubTab('depts')} className={`px-8 py-4 text-xs font-black uppercase tracking-widest ${subTab === 'depts' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/10' : 'text-slate-400'}`}>Departments & Roles</button>
+        <button onClick={() => setSubTab('hierarchy')} className={`px-8 py-4 text-xs font-black uppercase tracking-widest ${subTab === 'hierarchy' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/10' : 'text-slate-400'}`}>Reporting Lines</button>
       </div>
 
-      <div className="space-y-6">
-        <h3 className="text-xl font-bold dark:text-white">Designations</h3>
-        <div className="flex gap-2">
-          <input 
-            type="text" 
-            placeholder="New Role" 
-            className="flex-1 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border text-sm dark:text-white"
-            value={newRole}
-            onChange={e => setNewRole(e.target.value)}
-          />
-          <button onClick={addRole} className="p-3 bg-slate-900 text-white rounded-xl"><Plus size={20}/></button>
-        </div>
-        <div className="grid grid-cols-1 gap-2">
-          {roles.map(role => (
-            <div key={role} className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 rounded-2xl">
-              <span className="text-sm font-bold dark:text-slate-300 capitalize">{role}</span>
-              {!([UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] as any).includes(role) && (
-                <button onClick={() => removeRole(role)} className="p-1.5 text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
-              )}
+      {subTab === 'depts' ? (
+        <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-12">
+          <div className="space-y-6">
+            <h3 className="text-xl font-bold dark:text-white flex items-center gap-2"><Briefcase size={20}/> Departments</h3>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="New Department" 
+                className="flex-1 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border text-sm dark:text-white"
+                value={newDept}
+                onChange={e => setNewDept(e.target.value)}
+              />
+              <button onClick={addDept} className="p-3 bg-slate-900 text-white rounded-xl"><Plus size={20}/></button>
             </div>
-          ))}
+            <div className="grid grid-cols-1 gap-2">
+              {departments.map(dept => (
+                <div key={dept} className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl">
+                  <span className="text-sm font-bold dark:text-slate-300">{dept}</span>
+                  <button onClick={() => removeDept(dept)} className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <h3 className="text-xl font-bold dark:text-white flex items-center gap-2"><ShieldPlus size={20}/> Designations</h3>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="New Role" 
+                className="flex-1 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border text-sm dark:text-white"
+                value={newRole}
+                onChange={e => setNewRole(e.target.value)}
+              />
+              <button onClick={addRole} className="p-3 bg-slate-900 text-white rounded-xl"><Plus size={20}/></button>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {roles.map(role => (
+                <div key={role} className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl">
+                  <span className="text-sm font-bold dark:text-slate-300 capitalize">{role}</span>
+                  {!([UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] as any).includes(role) && (
+                    <button onClick={() => removeRole(role)} className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-8">
+          <div className="flex items-center gap-3 mb-8">
+             <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl"><GitGraph size={24}/></div>
+             <div>
+               <h3 className="text-xl font-bold dark:text-white">Reporting Hierarchy</h3>
+               <p className="text-xs text-slate-500">Define direct managers for each staff member</p>
+             </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {users.map(u => (
+              <div key={u.id} className="p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm hover:shadow-md transition-all">
+                <div className="flex items-center gap-3 mb-4">
+                  <img src={u.avatar} className="w-10 h-10 rounded-full" alt="" />
+                  <div>
+                    <h4 className="font-bold text-sm dark:text-white">{u.name}</h4>
+                    <p className="text-[10px] font-black uppercase text-slate-400">{u.department} • {u.role}</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-2 pt-4 border-t dark:border-slate-800">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-blue-500 flex items-center gap-1.5">
+                    <UserCheck size={12}/> Assign Direct Manager
+                  </label>
+                  <select 
+                    className="w-full bg-slate-50 dark:bg-slate-800 p-2.5 rounded-xl text-xs font-bold dark:text-white outline-none ring-1 ring-slate-100 dark:ring-slate-700"
+                    value={u.managerId || ''}
+                    onChange={(e) => handleUpdateManager(u.id, e.target.value)}
+                  >
+                    <option value="">No Manager Assigned</option>
+                    {users.filter(m => m.id !== u.id && m.role !== UserRole.STAFF).map(m => (
+                      <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -412,8 +469,13 @@ const LeaveManagementForm = ({ currentUser, requests, setRequests, language }: {
   };
 
   const filteredRequests = requests.filter(r => {
+    // Admins see everything. Managers only see others.
+    const isAdmin = currentUser.role === UserRole.ADMIN;
     const isNotMe = r.staffId !== currentUser.staffId;
     const matchesFilter = filter === 'all' || r.status === filter;
+    
+    // If I'm an admin, I see everything regardless of 'isNotMe' (optional, but requested for approval visibility)
+    if (isAdmin) return matchesFilter;
     return isNotMe && matchesFilter;
   });
 

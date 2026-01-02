@@ -157,14 +157,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
                 <div className="relative shrink-0">
                   <img src={c.avatar} className="w-12 h-12 rounded-full border-2 border-slate-200 dark:border-slate-700" alt="" />
                   {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white dark:border-slate-950">
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white dark:border-slate-950 animate-bounce">
                       {unreadCount}
                     </span>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center mb-0.5">
-                    <span className="font-bold text-sm dark:text-white truncate">{c.name}</span>
+                    <span className={`text-sm dark:text-white truncate ${unreadCount > 0 ? 'font-black' : 'font-bold'}`}>{c.name}</span>
                     <span className="text-[9px] text-slate-400 font-bold">{lastMsg?.timestamp || ''}</span>
                   </div>
                   <p className={`text-[10px] uppercase tracking-tighter truncate ${unreadCount > 0 ? 'text-blue-600 font-black' : 'text-slate-500 font-bold'}`}>

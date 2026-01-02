@@ -25,7 +25,6 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [activeToast, setActiveToast] = useState<AppNotification | null>(null);
   
-  // Real-time Synced States
   const [globalMessages, setGlobalMessages] = useState<ChatMessage[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [safetyReports, setSafetyReports] = useState<SafetyReport[]>([]);
@@ -74,7 +73,8 @@ const App: React.FC = () => {
     if (userData) setUsers(userData.map(u => ({
       id: u.id, name: u.name, username: u.username, password: u.password,
       role: u.role as UserRole, staffId: u.staff_id, avatar: u.avatar || `https://picsum.photos/seed/${u.id}/200/200`,
-      department: u.department, status: u.status, mustChangePassword: u.must_change_password
+      department: u.department, status: u.status, mustChangePassword: u.must_change_password,
+      managerId: u.manager_id
     })));
 
     if (taskData) setTasks(taskData.map(t => ({
@@ -102,9 +102,9 @@ const App: React.FC = () => {
     if (postsData) setForumPosts(postsData.map(p => ({
       id: p.id, authorId: p.author_id, authorName: p.author_name, title: p.title, content: p.content,
       createdAt: new Date(p.created_at).toLocaleTimeString(),
-      replies: p.forum_replies?.map((r: any) => ({
-        id: r.id, authorName: r.author_name, content: r.content, createdAt: new Date(r.created_at).toLocaleTimeString()
-      })) || []
+      replies: (p.forum_replies || []).map((r: any) => ({
+        id: r.id, post_id: r.post_id, author_name: r.author_name, content: r.content, createdAt: new Date(r.created_at).toLocaleTimeString()
+      }))
     })));
 
     if (messageData) setGlobalMessages(messageData.map(m => ({
@@ -117,7 +117,6 @@ const App: React.FC = () => {
     syncAllData();
   }, [syncAllData]);
 
-  // FULL REALTIME NOTIFICATION ENGINE
   useEffect(() => {
     if (!currentUser || !isSupabaseConfigured()) return;
 
@@ -126,8 +125,7 @@ const App: React.FC = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
           if (payload.eventType === 'INSERT') {
             const m = payload.new as any;
-            if (m.sender_id === currentUser.id) return; // Ignore own messages
-            
+            if (m.sender_id === currentUser.id) return;
             if (m.recipient_id === currentUser.id || m.recipient_id === 'all') {
               const isEmergency = m.recipient_id === 'all';
               addNotification({ 
@@ -140,10 +138,13 @@ const App: React.FC = () => {
           }
           syncAllData();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_replies' }, () => {
+        // High frequency sync for replies
+        syncAllData();
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'safety_reports' }, (payload) => {
           const r = payload.new as any;
           if (r.reporter_id === currentUser.id) return;
-          
           if (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SAFETY_MANAGER || currentUser.role === UserRole.MANAGER) {
             addNotification({
               title: "New Safety Report",
@@ -189,7 +190,6 @@ const App: React.FC = () => {
             }
           } else if (payload.eventType === 'UPDATE') {
              const t = payload.new as any;
-             // Notify the creator or manager when status changes
              if (t.status === 'in_progress' || t.status === 'completed') {
                 addNotification({
                   title: `Task Update: ${t.title}`,
@@ -232,7 +232,8 @@ const App: React.FC = () => {
 
   const unreadChatsCount = useMemo(() => {
     if (!currentUser) return 0;
-    return globalMessages.filter(m => m.recipient_id === currentUser.id && m.status !== 'read').length;
+    // Note: Database uses recipient_id but globalMessages mapping uses recipientId
+    return globalMessages.filter(m => m.recipientId === currentUser.id && m.status !== 'read').length;
   }, [globalMessages, currentUser]);
 
   const handleLogin = (user: User) => {

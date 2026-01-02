@@ -76,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, language, isOpen, onClose, onBr
                 {item.icon}
                 <span className="font-medium">{(t as any)[item.label]}</span>
                 {item.id === 'messages' && unreadChatsCount > 0 && (
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-lg animate-in zoom-in duration-300">
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-red-500 text-white text-[11px] font-black px-2 py-0.5 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse ring-2 ring-white/20">
                     {unreadChatsCount}
                   </span>
                 )}

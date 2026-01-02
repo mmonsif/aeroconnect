@@ -20,6 +20,7 @@ export interface User {
   department: string;
   status: 'active' | 'inactive';
   mustChangePassword?: boolean;
+  managerId?: string; // Added for hierarchy
 }
 
 export interface Task {
@@ -54,7 +55,7 @@ export interface SafetyReport {
 export interface ChatMessage {
   id: string;
   senderId: string;
-  recipientId: string; // Added for directed messages
+  recipientId: string;
   senderName: string;
   text: string;
   translation?: string;
@@ -74,7 +75,8 @@ export interface ForumPost {
 
 export interface ForumReply {
   id: string;
-  authorName: string;
+  post_id: string;
+  author_name: string;
   content: string;
   createdAt: string;
 }
