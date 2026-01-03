@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Language, UserRole, Task, SafetyReport, DocFile, ForumPost, LeaveRequest } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { useNavigate } from 'react-router-dom';
+// Changed import from react-router-dom to react-router to resolve missing export errors
+import { useNavigate } from 'react-router';
 import { 
   ClipboardList, 
   FileText, 

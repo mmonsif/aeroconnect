@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+// Changed import from react-router-dom to react-router to resolve missing export errors
+import { NavLink } from 'react-router';
 import { NAVIGATION_ITEMS, TRANSLATIONS, APP_NAME } from '../constants';
 import { User, Language, UserRole } from '../types';
 import { Plane, X, ShieldCheck, AlertCircle, Send, ShieldAlert } from 'lucide-react';
@@ -119,7 +120,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, language, isOpen, onClose, onBr
 
       {/* Broadcast Modal */}
       {isBroadcastModalOpen && (
-        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 backdrop-blur-md">
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
             <div className="bg-red-600 p-6 flex items-center gap-4 text-white">
               <div className="p-3 bg-white/20 rounded-2xl">

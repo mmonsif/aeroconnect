@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { User, Language, UserRole, LeaveRequest, DocFile, SafetyReport, Task } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { useLocation } from 'react-router-dom';
+// Changed import from react-router-dom to react-router to resolve missing export errors
+import { useLocation } from 'react-router';
 import { 
   Users as UsersIcon, 
   Calendar, 
@@ -12,20 +13,18 @@ import {
   Clock,
   Edit,
   Trash2,
-  MessageSquareReply,
   Key, 
   Power,
   PowerOff,
   UserPlus,
-  AlertTriangle,
   Lock,
   X,
   Briefcase,
   Layers,
-  ChevronRight,
   ShieldPlus,
   GitGraph,
-  UserCheck
+  UserCheck,
+  RefreshCcw
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -90,7 +89,7 @@ const AdminManagement: React.FC<AdminManagementProps> = ({
         {activeTab === 'users' && <UserManagement users={data.users} setUsers={setUsers} departments={data.departments} roles={data.roles} isAdmin={user.role === UserRole.ADMIN} />}
         {activeTab === 'leave' && <LeaveManagementForm currentUser={user} requests={data.leaveRequests} setRequests={setLeaveRequests} language={language} />}
         {activeTab === 'safety' && <SafetyReview reports={data.safetyReports} setReports={setSafetyReports} />}
-        {activeTab === 'org' && <OrgStructureManagement users={data.users} departments={data.departments} roles={data.roles} setDepartments={setDepartments} setRoles={setRoles} />}
+        {activeTab === 'org' && <OrgStructureManagement users={data.users} setUsers={setUsers} departments={data.departments} roles={data.roles} setDepartments={setDepartments} setRoles={setRoles} />}
       </div>
     </div>
   );
@@ -303,7 +302,7 @@ const UserManagement = ({ users, setUsers, departments, roles, isAdmin }: { user
   );
 };
 
-const OrgStructureManagement = ({ users, departments, roles, setDepartments, setRoles }: { users: User[], departments: string[], roles: string[], setDepartments: any, setRoles: any }) => {
+const OrgStructureManagement = ({ users, setUsers, departments, roles, setDepartments, setRoles }: { users: User[], setUsers: any, departments: string[], roles: string[], setDepartments: any, setRoles: any }) => {
   const [newDept, setNewDept] = useState('');
   const [newRole, setNewRole] = useState('');
   const [subTab, setSubTab] = useState<'depts' | 'hierarchy'>('depts');
@@ -339,7 +338,33 @@ const OrgStructureManagement = ({ users, departments, roles, setDepartments, set
 
   const handleUpdateManager = async (staffId: string, managerId: string) => {
     if (!isSupabaseConfigured()) return;
-    await supabase.from('users').update({ manager_id: managerId }).eq('id', staffId);
+    
+    // Optimistic local update
+    setUsers((prev: User[]) => prev.map(u => u.id === staffId ? { ...u, managerId } : u));
+    
+    try {
+      const { error } = await supabase.from('users').update({ manager_id: managerId || null }).eq('id', staffId);
+      if (error) {
+        throw error;
+      }
+    } catch (err: any) {
+      const errorMsg = err?.message || String(err);
+      console.error("Hierarchy update failed:", errorMsg);
+      
+      let alertMsg = `Hierarchy update failed: ${errorMsg}`;
+      if (errorMsg.toLowerCase().includes("manager_id") && errorMsg.toLowerCase().includes("not find")) {
+        alertMsg = "Operational Error: The 'manager_id' column is missing from your Supabase 'users' table. To fix this, open your Supabase SQL Editor and run: \n\nALTER TABLE users ADD COLUMN manager_id uuid REFERENCES users(id);";
+      }
+      
+      alert(alertMsg);
+      
+      // Re-sync users to get correct state back
+      const { data } = await supabase.from('users').select('*');
+      if (data) setUsers(data.map((u: any) => ({
+        id: u.id, name: u.name, username: u.username, role: u.role, staffId: u.staff_id, 
+        avatar: u.avatar, department: u.department, status: u.status, managerId: u.manager_id
+      })));
+    }
   };
 
   return (
@@ -423,7 +448,7 @@ const OrgStructureManagement = ({ users, departments, roles, setDepartments, set
                     <UserCheck size={12}/> Assign Direct Manager
                   </label>
                   <select 
-                    className="w-full bg-slate-50 dark:bg-slate-800 p-2.5 rounded-xl text-xs font-bold dark:text-white outline-none ring-1 ring-slate-100 dark:ring-slate-700"
+                    className="w-full bg-slate-50 dark:bg-slate-800 p-2.5 rounded-xl text-xs font-bold dark:text-white outline-none ring-1 ring-slate-100 dark:ring-slate-700 focus:ring-blue-500 transition-all"
                     value={u.managerId || ''}
                     onChange={(e) => handleUpdateManager(u.id, e.target.value)}
                   >
@@ -469,13 +494,9 @@ const LeaveManagementForm = ({ currentUser, requests, setRequests, language }: {
   };
 
   const filteredRequests = requests.filter(r => {
-    // Admins see everything. Managers only see others.
-    const isAdmin = currentUser.role === UserRole.ADMIN;
+    // Exclude the currentUser's own requests from the management view
     const isNotMe = r.staffId !== currentUser.staffId;
     const matchesFilter = filter === 'all' || r.status === filter;
-    
-    // If I'm an admin, I see everything regardless of 'isNotMe' (optional, but requested for approval visibility)
-    if (isAdmin) return matchesFilter;
     return isNotMe && matchesFilter;
   });
 
@@ -494,7 +515,7 @@ const LeaveManagementForm = ({ currentUser, requests, setRequests, language }: {
 
       <div className="space-y-4">
         {filteredRequests.length > 0 ? filteredRequests.map(r => (
-          <div key={r.id} className="p-5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl gap-6 flex flex-col md:flex-row md:items-center justify-between shadow-sm">
+          <div key={r.id} className="p-5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl gap-6 flex flex-col md:flex-row md:items-center justify-between shadow-sm hover:shadow-md transition-all">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center font-bold text-slate-500 uppercase shrink-0">{r.staffName.charAt(0)}</div>
               <div>
@@ -510,7 +531,7 @@ const LeaveManagementForm = ({ currentUser, requests, setRequests, language }: {
                 <>
                   <button onClick={() => handleSuggestClick(r)} className="px-3 py-2 text-orange-600 hover:bg-orange-50 rounded-xl text-xs font-bold transition-all">Suggest Dates</button>
                   <button onClick={() => handleStatusUpdate(r, 'rejected')} className="px-3 py-2 text-red-600 font-bold text-xs hover:bg-red-50 rounded-xl">Reject</button>
-                  <button onClick={() => handleStatusUpdate(r, 'approved')} className="px-5 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20">Approve</button>
+                  <button onClick={() => handleStatusUpdate(r, 'approved')} className="px-5 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">Approve</button>
                 </>
               )}
               {r.status === 'suggestion_sent' && <span className="text-[10px] font-bold text-slate-400 uppercase italic">Awaiting staff response...</span>}
@@ -520,7 +541,7 @@ const LeaveManagementForm = ({ currentUser, requests, setRequests, language }: {
           </div>
         )) : (
           <div className="py-20 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
-            <p className="text-sm font-medium">No pending staff leave requests</p>
+            <p className="text-sm font-medium">No pending staff leave requests found</p>
           </div>
         )}
       </div>
@@ -550,44 +571,61 @@ const LeaveManagementForm = ({ currentUser, requests, setRequests, language }: {
 const SafetyReview = ({ reports, setReports }: { reports: SafetyReport[], setReports: any }) => {
   const updateStatus = async (id: string, status: SafetyReport['status']) => {
     if (!isSupabaseConfigured()) return;
-    await supabase.from('safety_reports').update({ status }).eq('id', id);
+    const { error } = await supabase.from('safety_reports').update({ status }).eq('id', id);
+    if (error) console.error("Status update error:", error);
   };
 
   return (
-    <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+    <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
       {reports.length > 0 ? reports.map(rep => (
-        <div key={rep.id} className={`p-5 border border-slate-100 dark:border-slate-800 rounded-3xl space-y-3 bg-white dark:bg-slate-900 shadow-sm transition-opacity ${rep.status === 'resolved' ? 'opacity-60' : ''}`}>
+        <div key={rep.id} className={`p-5 border border-slate-100 dark:border-slate-800 rounded-3xl space-y-3 bg-white dark:bg-slate-900 shadow-sm transition-opacity ${rep.status === 'resolved' ? 'opacity-60 bg-slate-50 dark:bg-slate-950/20' : ''}`}>
           <div className="flex justify-between items-start">
             <div className="flex gap-2 items-center">
               <span className={`px-2 py-1 text-[10px] font-bold rounded-lg uppercase ${rep.severity === 'high' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
                 {rep.severity} SEVERITY
               </span>
-              <span className={`px-2 py-1 text-[10px] font-bold rounded-lg uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400`}>
+              <span className={`px-2 py-1 text-[10px] font-black rounded-lg uppercase ${
+                rep.status === 'resolved' ? 'bg-emerald-50 text-emerald-600' : 
+                rep.status === 'investigating' ? 'bg-orange-50 text-orange-600' : 
+                'bg-slate-100 dark:bg-slate-800 text-slate-500'
+              }`}>
                 {rep.status}
               </span>
             </div>
-            <span className="text-[10px] text-slate-400 font-medium">{rep.timestamp}</span>
+            <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-bold">
+              <Clock size={10}/> {rep.timestamp}
+            </div>
           </div>
           <p className="font-bold dark:text-white leading-snug">{rep.description}</p>
           
-          {rep.status !== 'resolved' && (
-            <div className="flex gap-2 mt-4 pt-4 border-t border-slate-50 dark:border-slate-800">
-              {rep.status === 'open' && (
-                <button 
-                  onClick={() => updateStatus(rep.id, 'investigating')}
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20"
-                >
-                  Investigate
-                </button>
-              )}
+          <div className="flex gap-2 mt-4 pt-4 border-t border-slate-50 dark:border-slate-800">
+            {rep.status === 'open' && (
+              <button 
+                onClick={() => updateStatus(rep.id, 'investigating')}
+                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 active:scale-95"
+              >
+                Investigate
+              </button>
+            )}
+            
+            {rep.status !== 'resolved' ? (
               <button 
                 onClick={() => updateStatus(rep.id, 'resolved')}
-                className="flex-1 py-2.5 bg-slate-900 dark:bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 transition-colors"
+                className="flex-1 py-2.5 bg-slate-900 dark:bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-colors active:scale-95"
               >
+                <Check size={14} className="inline mr-2"/>
                 Mark Resolved
               </button>
-            </div>
-          )}
+            ) : (
+              <button 
+                onClick={() => updateStatus(rep.id, 'open')}
+                className="flex-1 py-2.5 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-700 transition-colors shadow-lg shadow-orange-500/20 active:scale-95"
+              >
+                <RefreshCcw size={14} className="inline mr-2"/>
+                Re-open Report
+              </button>
+            )}
+          </div>
         </div>
       )) : (
         <div className="py-20 text-center text-slate-400">No open safety reports in the queue.</div>

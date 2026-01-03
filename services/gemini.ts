@@ -1,20 +1,8 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-/**
- * Robust API Key recovery.
- * In some browser environments, 'process' is not defined globally.
- */
-const getApiKey = () => {
-  try {
-    // @ts-ignore
-    return (typeof process !== 'undefined' && process.env?.API_KEY) || '';
-  } catch (e) {
-    return '';
-  }
-};
-
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+// Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export interface SafetyAnalysisResponse {
   summary: string;

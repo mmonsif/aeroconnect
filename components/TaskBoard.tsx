@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { User, Language, Task, UserRole } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { useLocation } from 'react-router-dom';
+// Changed import from react-router-dom to react-router to resolve missing export errors
+import { useLocation } from 'react-router';
 import { Plus, MapPin, X, Edit, Trash2, Play, CheckCircle, User as UserIcon, AlertCircle, Activity } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -65,6 +66,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
   const handleStatusUpdate = async (id: string, status: Task['status']) => {
     if (!isSupabaseConfigured()) return;
     
+    // Optimistic update
     setTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
 
     try {
@@ -72,13 +74,34 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
       if (error) throw error;
     } catch (err) {
       console.error("Failed to update task status:", err);
-      alert("Failed to sync task update. Please check your connection.");
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Are you sure?")) {
-      await supabase.from('tasks').delete().eq('id', id);
+    if (!isSupabaseConfigured()) {
+      alert("Database link not established.");
+      return;
+    }
+
+    if (window.confirm("ARE YOU SURE? This operation will permanently remove this duty from the ground logs.")) {
+      // Immediate Optimistic UI Update
+      setTasks(prev => prev.filter(t => t.id !== id));
+
+      try {
+        const { error } = await supabase.from('tasks').delete().eq('id', id);
+        if (error) throw error;
+      } catch (err: any) {
+        console.error("Terminal Task Deletion Failed:", err);
+        alert(`Security system blocked deletion: ${err?.message || 'Connection error'}. Reverting...`);
+        
+        // Manual re-sync to revert local state
+        const { data } = await supabase.from('tasks').select('*').order('created_at', { ascending: false });
+        if (data) setTasks(data.map((t: any) => ({
+          id: t.id, title: t.title, description: t.description || '', assignedTo: t.assigned_to,
+          status: t.status, priority: t.priority, location: t.location, department: t.department,
+          createdAt: t.created_at
+        })));
+      }
     }
   };
 
@@ -141,7 +164,6 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
                   task.priority === 'high' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'
                 }`}>{task.priority} Priority</span>
                 
-                {/* Status Badge - VISIBILITY IMPROVEMENT */}
                 <span className={`w-fit px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 ${getStatusColor(task.status)}`}>
                   {task.status === 'in_progress' && <Activity size={10} className="animate-pulse"/>}
                   {task.status.replace('_', ' ')}
@@ -150,8 +172,16 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
               
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 {canModify(task) && (
-                  <><button onClick={() => handleEdit(task)} className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors"><Edit size={16} /></button>
-                  <button onClick={() => handleDelete(task.id)} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={16} /></button></>
+                  <>
+                    <button onClick={(e) => { e.stopPropagation(); handleEdit(task); }} className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors"><Edit size={16} /></button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDelete(task.id); }} 
+                      className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                      title="Delete Permanently"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
