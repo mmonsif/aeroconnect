@@ -16,12 +16,25 @@ import ManualsBoard from './components/ManualsBoard';
 import MyLeaveBoard from './components/MyLeaveBoard';
 import Login from './components/Login';
 import ChangePassword from './components/ChangePassword';
-import { X } from 'lucide-react';
+import { X, Sparkles } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 // Use a valid UUID format for broadcasts. 
 // Note: This user MUST exist in your "users" table to satisfy foreign key constraints.
 const BROADCAST_ID = '00000000-0000-0000-0000-000000000000';
+
+// Declaration for aistudio window object
+/* Define AIStudio interface to avoid conflict with existing global declarations */
+interface AIStudio {
+  hasSelectedApiKey: () => Promise<boolean>;
+  openSelectKey: () => Promise<void>;
+}
+
+declare global {
+  interface Window {
+    aistudio: AIStudio;
+  }
+}
 
 const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>('en');
@@ -46,6 +59,8 @@ const App: React.FC = () => {
   const [availableRoles, setAvailableRoles] = useState<string[]>([
     UserRole.STAFF, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.SAFETY_MANAGER, UserRole.ADMIN
   ]);
+
+  const [aiEnabled, setAiEnabled] = useState(true);
 
   const addNotification = useCallback((notif: Omit<AppNotification, 'id' | 'timestamp' | 'isRead'>) => {
     const newNotif: AppNotification = { ...notif, id: `n-${Date.now()}`, timestamp: new Date(), isRead: false };
@@ -125,6 +140,29 @@ const App: React.FC = () => {
   useEffect(() => {
     syncAllData();
   }, [syncAllData]);
+
+  useEffect(() => {
+    const checkAiKey = async () => {
+      if (window.aistudio) {
+        try {
+          const hasKey = await window.aistudio.hasSelectedApiKey();
+          setAiEnabled(!!process.env.API_KEY || hasKey);
+        } catch (e) {
+          setAiEnabled(!!process.env.API_KEY);
+        }
+      } else {
+        setAiEnabled(!!process.env.API_KEY);
+      }
+    };
+    checkAiKey();
+  }, []);
+
+  const handleEnableAi = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      setAiEnabled(true);
+    }
+  };
 
   useEffect(() => {
     if (!currentUser || !isSupabaseConfigured()) return;
@@ -329,6 +367,24 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
+          
+          {!aiEnabled && isLoggedIn && (
+            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] w-full max-w-md px-4">
+              <div className="bg-slate-900/90 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl border border-white/10 flex items-center justify-between gap-4 animate-in slide-in-from-bottom-full">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-600 rounded-lg"><Sparkles size={16}/></div>
+                  <p className="text-xs font-bold">AI Intelligence is currently offline.</p>
+                </div>
+                <button 
+                  onClick={handleEnableAi}
+                  className="px-4 py-2 bg-white text-slate-900 text-[10px] font-black uppercase rounded-xl hover:bg-blue-50 transition-all"
+                >
+                  Enable AI
+                </button>
+              </div>
+            </div>
+          )}
+
           {currentUser && (
             <Header 
               user={currentUser} language={language} onToggleLanguage={() => setLanguage(l => l === 'en' ? 'ar' : 'en')}

@@ -1,9 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export interface SafetyAnalysisResponse {
   summary: string;
   entities: {
@@ -16,6 +13,7 @@ export interface SafetyAnalysisResponse {
 export const geminiService = {
   translate: async (text: string, targetLang: 'en' | 'ar') => {
     try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Translate the following airport ground operations text to ${targetLang === 'en' ? 'English' : 'Arabic'}: "${text}". Return only the translated text.`,
@@ -29,6 +27,7 @@ export const geminiService = {
 
   summarizeChat: async (messages: any[]) => {
     try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const conversation = messages.map(m => `${m.senderName}: ${m.text}`).join("\n");
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -43,6 +42,7 @@ export const geminiService = {
 
   analyzeSafetyReport: async (report: string): Promise<SafetyAnalysisResponse | null> => {
     try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Analyze the following airport safety report. Provide a professional analysis summary and extract all mentioned locations, equipment, and personnel into structured lists.
@@ -94,6 +94,7 @@ export const geminiService = {
 
   generateBriefing: async (tasks: any[]) => {
     try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const taskStr = tasks.map(t => `${t.title} at ${t.location} (${t.status})`).join(", ");
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
