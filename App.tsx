@@ -145,6 +145,11 @@ const App: React.FC = () => {
     const checkAiKey = async () => {
       // Check for OpenRouter API key directly
       const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+      console.log('OpenRouter API Key check:', {
+        key: openRouterKey ? 'present' : 'missing',
+        length: openRouterKey?.length,
+        isValid: !!openRouterKey && openRouterKey !== 'your_openrouter_api_key_here'
+      });
       setAiEnabled(!!openRouterKey && openRouterKey !== 'your_openrouter_api_key_here');
     };
     checkAiKey();
