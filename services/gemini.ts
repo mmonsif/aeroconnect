@@ -23,8 +23,6 @@ const validateApiKey = () => {
   }
 };
 
-validateApiKey();
-
 const openRouter = new OpenRouter({
   apiKey: apiKey,
 });
@@ -50,6 +48,7 @@ const callOpenRouter = async (messages: any[], model: string = 'openai/gpt-4o-mi
 export const geminiService = {
   translate: async (text: string, targetLang: 'en' | 'ar') => {
     try {
+      validateApiKey();
       const messages = [
         {
           role: 'user',
@@ -67,6 +66,7 @@ export const geminiService = {
 
   summarizeChat: async (messages: any[]) => {
     try {
+      validateApiKey();
       const conversation = messages.map(m => `${m.senderName}: ${m.text}`).join("\n");
       const promptMessages = [
         {
@@ -85,6 +85,7 @@ export const geminiService = {
 
   analyzeSafetyReport: async (report: string): Promise<SafetyAnalysisResponse | null> => {
     try {
+      validateApiKey();
       const messages = [
         {
           role: 'user',
@@ -145,6 +146,7 @@ Return the response as valid JSON with this exact structure:
 
   generateBriefing: async (tasks: any[]) => {
     try {
+      validateApiKey();
       const taskStr = tasks.map(t => `${t.title} at ${t.location} (${t.status})`).join(", ");
       const messages = [
         {
