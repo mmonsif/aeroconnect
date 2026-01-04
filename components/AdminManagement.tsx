@@ -87,7 +87,7 @@ const AdminManagement: React.FC<AdminManagementProps> = ({
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm min-h-[400px]">
         {activeTab === 'users' && <UserManagement users={data.users} setUsers={setUsers} departments={data.departments} roles={data.roles} isAdmin={user.role === UserRole.ADMIN} />}
-        {activeTab === 'leave' && <LeaveManagementForm currentUser={user} requests={data.leaveRequests} setRequests={setLeaveRequests} language={language} />}
+        {activeTab === 'leave' && <LeaveManagementForm currentUser={user} requests={data.leaveRequests} setRequests={setLeaveRequests} language={language} users={data.users} />}
         {activeTab === 'safety' && <SafetyReview reports={data.safetyReports} setReports={setSafetyReports} />}
         {activeTab === 'org' && <OrgStructureManagement users={data.users} setUsers={setUsers} departments={data.departments} roles={data.roles} setDepartments={setDepartments} setRoles={setRoles} />}
       </div>
@@ -467,7 +467,7 @@ const OrgStructureManagement = ({ users, setUsers, departments, roles, setDepart
   );
 };
 
-const LeaveManagementForm = ({ currentUser, requests, setRequests, language }: { currentUser: User, requests: LeaveRequest[], setRequests: any, language: Language }) => {
+const LeaveManagementForm = ({ currentUser, requests, setRequests, language, users }: { currentUser: User, requests: LeaveRequest[], setRequests: any, language: Language, users: User[] }) => {
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'suggestion_sent'>('all');
   const [activeSuggestionReq, setActiveSuggestionReq] = useState<LeaveRequest | null>(null);
   const [suggestionDates, setSuggestionDates] = useState({ start: '', end: '', note: '' });
@@ -494,10 +494,12 @@ const LeaveManagementForm = ({ currentUser, requests, setRequests, language }: {
   };
 
   const filteredRequests = requests.filter(r => {
-    // Exclude the currentUser's own requests from the management view
-    const isNotMe = r.staffId !== currentUser.staffId;
+    // Find the user who made the request
+    const requestingUser = users.find(u => u.staffId === r.staffId);
+    // Show requests where the requesting user's managerId equals currentUser.id
+    const isDirectReport = requestingUser?.managerId === currentUser.id;
     const matchesFilter = filter === 'all' || r.status === filter;
-    return isNotMe && matchesFilter;
+    return isDirectReport && matchesFilter;
   });
 
   return (
