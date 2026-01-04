@@ -168,26 +168,23 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
   const handleDownload = async (doc: DocFile) => {
     try {
       if (doc.filePath) {
-        // Download actual file from Supabase Storage
-        const { data, error } = await supabase.storage
+        // Get public URL for the file
+        const { data } = supabase.storage
           .from('documents')
-          .download(doc.filePath);
+          .getPublicUrl(doc.filePath);
 
-        if (error) {
-          console.error('Download error:', error);
-          alert('Failed to download document. Please try again.');
-          return;
+        if (data?.publicUrl) {
+          // Create download link using public URL
+          const a = document.createElement('a');
+          a.href = data.publicUrl;
+          a.download = doc.name;
+          a.target = '_blank'; // Open in new tab to avoid CORS issues
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } else {
+          alert('Failed to generate download link. Please try again.');
         }
-
-        // Create download link
-        const url = URL.createObjectURL(data);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = doc.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
       } else {
         // Fallback to demo content if no file path
         const content = `AEROCONNECT SECURE DOCUMENT ACCESS\n\nFilename: ${doc.name}\nType: ${doc.type} MANUAL\nSecurity Level: INTERNAL\nAuthorized for: ${user.name} (${user.staffId})\nDownloaded on: ${new Date().toLocaleString()}\n\n[CONFIDENTIAL DOCUMENT CONTENT HASH: 8f9e2b1c]`;

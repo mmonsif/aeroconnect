@@ -67,6 +67,8 @@ CREATE TABLE public.documents (
   name text NOT NULL,
   type text NOT NULL,
   uploaded_by text,
+  file_path text,
+  file_size bigint,
   created_at timestamptz DEFAULT now()
 );
 
