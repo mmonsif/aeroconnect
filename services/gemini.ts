@@ -16,9 +16,12 @@ export interface TextAnalysisResponse {
 
 const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
 
-if (!apiKey || apiKey === 'your_openrouter_api_key_here') {
-  throw new Error('OpenRouter API key not configured');
-}
+// Only throw error if we're actually trying to use AI features and no key is set
+const validateApiKey = () => {
+  if (!apiKey || apiKey === 'your_openrouter_api_key_here') {
+    throw new Error('OpenRouter API key not configured');
+  }
+};
 
 const openRouter = new OpenRouter({
   apiKey: apiKey,
