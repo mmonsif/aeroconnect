@@ -53,12 +53,31 @@ const ForumBoard: React.FC<ForumBoardProps> = ({ user, language, posts, setPosts
   const handleReplySubmit = async (postId: string) => {
     const text = replyInputs[postId];
     if (!text?.trim() || !isSupabaseConfigured()) return;
+
+    const replyId = `r-${Date.now()}`;
+    const newReply: ForumReply = {
+      id: replyId,
+      post_id: postId,
+      author_name: user.name,
+      content: text,
+      createdAt: new Date().toLocaleString()
+    };
+
+    // Update local state immediately
+    setPosts(prev => prev.map(post =>
+      post.id === postId
+        ? { ...post, replies: [...(post.replies || []), newReply] }
+        : post
+    ));
+
+    // Insert into database
     await supabase.from('forum_replies').insert([{
-      id: `r-${Date.now()}`,
+      id: replyId,
       post_id: postId,
       author_name: user.name,
       content: text
     }]);
+
     setReplyInputs(prev => ({ ...prev, [postId]: '' }));
   };
 

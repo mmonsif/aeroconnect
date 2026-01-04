@@ -23,6 +23,8 @@ const validateApiKey = () => {
   }
 };
 
+validateApiKey();
+
 const openRouter = new OpenRouter({
   apiKey: apiKey,
 });
