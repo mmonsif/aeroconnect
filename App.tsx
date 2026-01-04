@@ -333,12 +333,18 @@ const App: React.FC = () => {
   }
 
   if (needsPasswordChange) {
-    return <ChangePassword onComplete={async (p) => { 
+  return <ChangePassword onComplete={async (p) => {
       if (currentUser) {
         await supabase.from('users').update({ password: p, must_change_password: false }).eq('id', currentUser.id);
         setCurrentUser(curr => curr ? { ...curr, mustChangePassword: false } : null);
         setNeedsPasswordChange(false);
         setIsLoggedIn(true);
+        addNotification({
+          title: "Password Updated",
+          message: "Your password has been successfully changed.",
+          type: 'leave', // Using leave type for now, could be a new type
+          severity: 'info'
+        });
       }
     }} language={language} />;
   }

@@ -2,12 +2,13 @@
 import React from 'react';
 import { User, Language, LeaveRequest } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { 
-  CalendarDays, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  HelpCircle, 
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import {
+  CalendarDays,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
   MessageSquareReply,
   AlertCircle,
   ArrowRight
@@ -30,22 +31,47 @@ const MyLeaveBoard: React.FC<MyLeaveBoardProps> = ({ user, language, requests, s
     alert("Leave request has been successfully withdrawn. Management has been notified.");
   };
 
-  const handleAcceptSuggestion = (req: LeaveRequest) => {
+  const handleAcceptSuggestion = async (req: LeaveRequest) => {
     if (!req.suggestedStartDate || !req.suggestedEndDate) return;
-    
-    // Transitions request directly to Approved with suggested dates
-    setRequests(prev => prev.map(r => 
-      r.id === req.id ? { 
-        ...r, 
-        status: 'approved', 
-        startDate: req.suggestedStartDate!, 
-        endDate: req.suggestedEndDate!,
-        suggestion: undefined,
-        suggestedStartDate: undefined,
-        suggestedEndDate: undefined
-      } : r
-    ));
-    alert("You have accepted the suggested dates. Your leave is now APPROVED.");
+
+    try {
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase
+          .from('leave_requests')
+          .update({
+            status: 'approved',
+            start_date: req.suggestedStartDate,
+            end_date: req.suggestedEndDate,
+            suggestion: null,
+            suggested_start_date: null,
+            suggested_end_date: null
+          })
+          .eq('id', req.id);
+
+        if (error) {
+          console.error('Error accepting suggestion:', error);
+          alert('Failed to accept suggestion. Please try again.');
+          return;
+        }
+      }
+
+      // Update local state
+      setRequests(prev => prev.map(r =>
+        r.id === req.id ? {
+          ...r,
+          status: 'approved',
+          startDate: req.suggestedStartDate!,
+          endDate: req.suggestedEndDate!,
+          suggestion: undefined,
+          suggestedStartDate: undefined,
+          suggestedEndDate: undefined
+        } : r
+      ));
+      alert("You have accepted the suggested dates. Your leave is now APPROVED.");
+    } catch (error) {
+      console.error('Error accepting suggestion:', error);
+      alert('Failed to accept suggestion. Please try again.');
+    }
   };
 
   const getStatusStyle = (status: string) => {
