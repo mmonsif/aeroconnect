@@ -4,6 +4,7 @@ import { User, Language, UserRole, Task, SafetyReport, DocFile, ForumPost, Leave
 import { TRANSLATIONS } from '../constants';
 // Changed import from react-router-dom to react-router to resolve missing export errors
 import { useNavigate } from 'react-router';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { 
   ClipboardList, 
   FileText, 
@@ -106,8 +107,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, language, onToggleTheme, da
     reason: ''
   });
 
-  const handleLeaveSubmit = () => {
-    if (!leaveForm.startDate || !leaveForm.endDate || !leaveForm.reason) return;
+  const handleLeaveSubmit = async () => {
+    if (!leaveForm.startDate || !leaveForm.endDate || !leaveForm.reason) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+
     const newReq: LeaveRequest = {
       id: `L-${Date.now()}`,
       staffId: user.staffId,
@@ -118,9 +123,71 @@ const Dashboard: React.FC<DashboardProps> = ({ user, language, onToggleTheme, da
       status: 'pending',
       reason: leaveForm.reason
     };
-    setLeaveRequests(prev => [newReq, ...prev]);
-    setIsLeaveModalOpen(false);
-    setLeaveForm({ type: 'annual', startDate: '', endDate: '', reason: '' });
+
+    console.log('Submitting leave request:', newReq);
+    console.log('Supabase configured:', isSupabaseConfigured());
+    console.log('Current user:', { id: user.id, staffId: user.staffId, name: user.name });
+
+    // Save to Supabase
+    if (isSupabaseConfigured()) {
+      try {
+        console.log('Attempting to insert into Supabase...');
+        const { data, error } = await supabase.from('leave_requests').insert([{
+          id: newReq.id,
+          staff_id: newReq.staffId,
+          staff_name: newReq.staffName,
+          type: newReq.type,
+          start_date: newReq.startDate,
+          end_date: newReq.endDate,
+          status: newReq.status,
+          reason: newReq.reason
+        }]).select();
+
+        if (error) {
+          console.error('Supabase insert error:', error);
+          console.error('Error details:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          });
+          alert(`Failed to submit leave request: ${error.message}\n\nPlease check the console for more details.`);
+          return;
+        }
+
+        console.log('Leave request inserted successfully:', data);
+        console.log('Data returned from insert:', data);
+
+        // Update local state with the data from Supabase
+        if (data && data.length > 0) {
+          setLeaveRequests(prev => [data[0], ...prev]);
+        } else {
+          setLeaveRequests(prev => [newReq, ...prev]);
+        }
+
+        setIsLeaveModalOpen(false);
+        setLeaveForm({ type: 'annual', startDate: '', endDate: '', reason: '' });
+        alert('Leave request submitted successfully!');
+
+        // Force a data sync to ensure consistency
+        setTimeout(() => {
+          console.log('Triggering data sync after leave submission...');
+          // This will be handled by the real-time subscription in App.tsx
+        }, 1000);
+
+      } catch (error: any) {
+        console.error('Failed to submit leave request:', error);
+        console.error('Error stack:', error.stack);
+        alert(`Failed to submit leave request: ${error.message || 'Unknown error'}\n\nPlease check the console for more details.`);
+      }
+    } else {
+      console.warn('Supabase not configured, using local state only');
+      alert('Database not configured. Request saved locally only.');
+      // Fallback to local state only if Supabase is not configured
+      setLeaveRequests(prev => [newReq, ...prev]);
+      setIsLeaveModalOpen(false);
+      setLeaveForm({ type: 'annual', startDate: '', endDate: '', reason: '' });
+    }
   };
 
   const getVisibleTasks = () => {
@@ -234,34 +301,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, language, onToggleTheme, da
             </button>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-black uppercase tracking-tighter text-slate-900 dark:text-white">Recent Hub Intelligence</h3>
-              <button onClick={() => navigate('/safety')} className="text-[10px] font-bold text-blue-500 uppercase hover:underline">View Intelligence Hub</button>
-            </div>
-            <div className="space-y-4">
-              {data.safetyReports.slice(0, 3).map(rep => (
-                <div key={rep.id} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl flex items-start gap-4 hover:bg-slate-100 transition-colors">
-                  <div className="p-2 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
-                    <ShieldAlert className={rep.severity === 'high' ? 'text-red-500' : 'text-orange-500'} size={18} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-bold dark:text-white line-clamp-1">{rep.description}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[9px] font-black uppercase text-slate-400">{rep.timestamp}</span>
-                      {rep.entities && (
-                        <div className="flex gap-1">
-                          {rep.entities.locations.slice(0,1).map(loc => (
-                            <span key={loc} className="text-[8px] bg-blue-100 dark:bg-blue-900/40 text-blue-600 px-1.5 py-0.5 rounded uppercase font-bold">{loc}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+
         </div>
 
         <div className="space-y-6">

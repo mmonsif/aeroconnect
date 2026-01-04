@@ -474,7 +474,10 @@ const LeaveManagementForm = ({ currentUser, requests, setRequests, language, use
 
   const handleStatusUpdate = async (req: LeaveRequest, status: 'approved' | 'rejected') => {
     if (!isSupabaseConfigured()) return;
-    await supabase.from('leave_requests').update({ status }).eq('id', req.id);
+    const { error } = await supabase.from('leave_requests').update({ status }).eq('id', req.id);
+    if (!error) {
+      setRequests(prev => prev.map(r => r.id === req.id ? { ...r, status } : r));
+    }
   };
 
   const handleSuggestClick = (req: LeaveRequest) => {
@@ -496,10 +499,22 @@ const LeaveManagementForm = ({ currentUser, requests, setRequests, language, use
   const filteredRequests = requests.filter(r => {
     // Find the user who made the request
     const requestingUser = users.find(u => u.staffId === r.staffId);
-    // Show requests where the requesting user's managerId equals currentUser.id
-    const isDirectReport = requestingUser?.managerId === currentUser.id;
+
+    let canView = false;
+    if (currentUser.role === UserRole.ADMIN) {
+      canView = true;
+    } else if (currentUser.role === UserRole.MANAGER) {
+      // Managers can see requests from their department or direct reports
+      const isInDepartment = requestingUser?.department === currentUser.department;
+      const isDirectReport = requestingUser?.managerId === currentUser.id;
+      canView = isInDepartment || isDirectReport;
+    } else if (currentUser.role === UserRole.STAFF) {
+      // Staff can see their own requests
+      canView = r.staffId === currentUser.staffId;
+    }
+
     const matchesFilter = filter === 'all' || r.status === filter;
-    return isDirectReport && matchesFilter;
+    return canView && matchesFilter;
   });
 
   return (
@@ -574,7 +589,11 @@ const SafetyReview = ({ reports, setReports }: { reports: SafetyReport[], setRep
   const updateStatus = async (id: string, status: SafetyReport['status']) => {
     if (!isSupabaseConfigured()) return;
     const { error } = await supabase.from('safety_reports').update({ status }).eq('id', id);
-    if (error) console.error("Status update error:", error);
+    if (!error) {
+      setReports(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    } else {
+      console.error("Status update error:", error);
+    }
   };
 
   return (
