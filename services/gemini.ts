@@ -126,6 +126,7 @@ Return the response as valid JSON with this exact structure:
 
   analyzeText: async (text: string): Promise<TextAnalysisResponse | null> => {
     try {
+      validateApiKey();
       const messages = [
         {
           role: 'user',
