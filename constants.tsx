@@ -46,7 +46,17 @@ export const TRANSLATIONS = {
     docsManagement: "Docs Management",
     searchPlaceholder: "Search tasks, flights, staff...",
     manuals: "Manuals",
-    myleave: "My Leave Status"
+    myleave: "My Leave Status",
+    requestLeave: "Request Leave",
+    applyForLeave: "Apply for Leave",
+    leaveType: "Type",
+    startDate: "Start",
+    endDate: "End",
+    leaveReason: "Reason",
+    submitApplication: "Submit Application",
+    annual: "Annual",
+    sick: "Sick",
+    emergency: "Emergency"
   },
   ar: {
     dashboard: "لوحة القيادة",
@@ -77,7 +87,17 @@ export const TRANSLATIONS = {
     docsManagement: "إدارة المستندات",
     searchPlaceholder: "ابحث عن مهام، طائرات، موظفين...",
     manuals: "الأدلة",
-    myleave: "حالة إجازاتي"
+    myleave: "حالة إجازاتي",
+    requestLeave: "طلب إجازة",
+    applyForLeave: "طلب إجازة",
+    leaveType: "النوع",
+    startDate: "البداية",
+    endDate: "النهاية",
+    leaveReason: "السبب",
+    submitApplication: "تقديم الطلب",
+    annual: "سنوية",
+    sick: "مرضية",
+    emergency: "طارئة"
   }
 };
 

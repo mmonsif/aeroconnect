@@ -1,28 +1,15 @@
-
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vmteubfpwuiwzbncbikb.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_sjhzB9wzTsjzBAI3t-zKJw_7Y5vcDcC';
-
-// A helper to check if the Supabase client is likely to work
-export const isSupabaseConfigured = () => {
-  return supabaseUrl.length > 0 && 
-         supabaseAnonKey.length > 0 && 
-         !supabaseUrl.includes('your-project-url');
-};
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
 /**
- * MASTER DATABASE RECREATION SCRIPT
- * ---------------------------------------------------------
- * DIRECTIONS: 
- * 1. Open your Supabase Dashboard.
- * 2. Go to "SQL Editor" -> "New Query".
- * 3. Paste the ENTIRE block below and click "Run".
- * ---------------------------------------------------------
- 
--- 1. CLEAN SLATE: DROP OLD TABLES
+ * MASTER DATABASE RECREATION SCRIPT - COMPLETE CLEAN SLATE
+ * ---------------------------------------------------------------
+ * DIRECTIONS:
+ * 1. Open your Supabase Dashboard
+ * 2. Go to "SQL Editor" -> "New Query"
+ * 3. Paste the ENTIRE block below and click "Run"
+ * 4. This will drop everything and recreate from scratch
+ * ---------------------------------------------------------------
+
+-- 1. CLEAN SLATE: DROP ALL EXISTING TABLES AND POLICIES
+DROP TABLE IF EXISTS public.broadcast_alerts CASCADE;
 DROP TABLE IF EXISTS public.forum_replies CASCADE;
 DROP TABLE IF EXISTS public.forum_posts CASCADE;
 DROP TABLE IF EXISTS public.messages CASCADE;
@@ -31,6 +18,9 @@ DROP TABLE IF EXISTS public.safety_reports CASCADE;
 DROP TABLE IF EXISTS public.documents CASCADE;
 DROP TABLE IF EXISTS public.tasks CASCADE;
 DROP TABLE IF EXISTS public.users CASCADE;
+
+-- Drop existing function if it exists
+DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
 
 -- 2. CREATE USERS TABLE
 CREATE TABLE public.users (
@@ -67,13 +57,15 @@ CREATE TABLE public.documents (
   name text NOT NULL,
   type text NOT NULL,
   uploaded_by text,
+  file_path text,
+  file_size bigint,
   created_at timestamptz DEFAULT now()
 );
 
 -- 5. CREATE SAFETY REPORTS TABLE
 CREATE TABLE public.safety_reports (
   id text PRIMARY KEY,
-  reporter_id text, 
+  reporter_id text,
   type text NOT NULL,
   description text NOT NULL,
   severity text NOT NULL,
@@ -128,21 +120,39 @@ CREATE TABLE public.leave_requests (
   created_at timestamptz DEFAULT now()
 );
 
--- 9. INSERT SYSTEM BROADCAST USER (Crucial for Global Alerts)
+-- 9. CREATE BROADCAST ALERTS TABLE
+CREATE TABLE public.broadcast_alerts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id uuid NOT NULL REFERENCES public.users(id),
+  sender_name text NOT NULL,
+  message text NOT NULL,
+  timestamp timestamptz DEFAULT now(),
+  status text DEFAULT 'active' CHECK (status IN ('active', 'expired')),
+  recipients text[] DEFAULT '{}',
+  read_by text[] DEFAULT '{}',
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- 10. CREATE INDEXES FOR PERFORMANCE
+CREATE INDEX idx_broadcast_alerts_timestamp ON public.broadcast_alerts(timestamp DESC);
+CREATE INDEX idx_broadcast_alerts_status ON public.broadcast_alerts(status);
+
+-- 11. INSERT SYSTEM BROADCAST USER (Crucial for Global Alerts)
 INSERT INTO public.users (id, name, username, password, role, staff_id, department, status, must_change_password)
 VALUES (
-    '00000000-0000-0000-0000-000000000000', 
-    'SYSTEM BROADCAST', 
-    'system_alert', 
-    'no-login-' || gen_random_uuid(), 
-    'admin', 
-    'SYSTEM-001', 
-    'Management', 
-    'active', 
+    '00000000-0000-0000-0000-000000000000',
+    'SYSTEM BROADCAST',
+    'system_alert',
+    'no-login-' || gen_random_uuid(),
+    'admin',
+    'SYSTEM-001',
+    'Management',
+    'active',
     false
 ) ON CONFLICT (id) DO NOTHING;
 
--- 10. ENABLE ROW LEVEL SECURITY (RLS)
+-- 12. ENABLE ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
@@ -151,8 +161,9 @@ ALTER TABLE public.forum_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.forum_replies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leave_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.broadcast_alerts ENABLE ROW LEVEL SECURITY;
 
--- 11. CREATE "ALLOW ALL" POLICIES (For Development/Demo purposes)
+-- 13. CREATE POLICIES (Allow authenticated users for broadcast alerts)
 CREATE POLICY "Public Access" ON public.users FOR ALL USING (true);
 CREATE POLICY "Public Access" ON public.tasks FOR ALL USING (true);
 CREATE POLICY "Public Access" ON public.documents FOR ALL USING (true);
@@ -162,12 +173,51 @@ CREATE POLICY "Public Access" ON public.forum_replies FOR ALL USING (true);
 CREATE POLICY "Public Access" ON public.messages FOR ALL USING (true);
 CREATE POLICY "Public Access" ON public.leave_requests FOR ALL USING (true);
 
--- 12. CONFIGURE REALTIME
+-- Broadcast alerts policies
+CREATE POLICY "Allow authenticated users to insert broadcast alerts" ON public.broadcast_alerts
+  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Allow authenticated users to read broadcast alerts" ON public.broadcast_alerts
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Allow authenticated users to update broadcast alerts" ON public.broadcast_alerts
+  FOR UPDATE USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Allow authenticated users to delete broadcast alerts" ON public.broadcast_alerts
+  FOR DELETE USING (auth.uid() IS NOT NULL);
+
+-- 14. CREATE STORAGE BUCKET FOR DOCUMENTS
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('documents', 'documents', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- 15. CREATE STORAGE POLICIES FOR DOCUMENTS
+CREATE POLICY "Public Access" ON storage.objects FOR ALL USING (bucket_id = 'documents');
+
+-- 16. CREATE TRIGGER FUNCTION FOR UPDATED_AT
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- 17. CREATE TRIGGER FOR BROADCAST ALERTS
+CREATE TRIGGER update_broadcast_alerts_updated_at
+  BEFORE UPDATE ON public.broadcast_alerts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- 18. CONFIGURE REALTIME
 DROP PUBLICATION IF EXISTS supabase_realtime;
 CREATE PUBLICATION supabase_realtime FOR ALL TABLES;
 
--- 13. INITIAL LOGIN CREDENTIALS (Admin / 123456)
+-- 19. INITIAL LOGIN CREDENTIALS (Admin / 123456)
 INSERT INTO public.users (name, username, password, role, staff_id, department, status, must_change_password)
 VALUES ('System Admin', 'admin', '123456', 'admin', 'ADM-001', 'Management', 'active', false)
 ON CONFLICT (username) DO NOTHING;
+
+-- SUCCESS MESSAGE
+-- Database has been completely recreated with broadcast alerts functionality!
+-- Login with: admin / 123456
 */

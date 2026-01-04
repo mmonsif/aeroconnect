@@ -143,16 +143,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const checkAiKey = async () => {
-      if (window.aistudio) {
-        try {
-          const hasKey = await window.aistudio.hasSelectedApiKey();
-          setAiEnabled(!!process.env.API_KEY || hasKey);
-        } catch (e) {
-          setAiEnabled(!!process.env.API_KEY);
-        }
-      } else {
-        setAiEnabled(!!process.env.API_KEY);
-      }
+      // Check for OpenRouter API key directly
+      const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+      setAiEnabled(!!openRouterKey && openRouterKey !== 'your_openrouter_api_key_here');
     };
     checkAiKey();
   }, []);

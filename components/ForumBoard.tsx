@@ -12,7 +12,7 @@ interface ForumBoardProps {
   setPosts: React.Dispatch<React.SetStateAction<ForumPost[]>>;
 }
 
-const ForumBoard: React.FC<ForumBoardProps> = ({ user, language, posts }) => {
+const ForumBoard: React.FC<ForumBoardProps> = ({ user, language, posts, setPosts }) => {
   const t = TRANSLATIONS[language];
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
@@ -21,13 +21,30 @@ const ForumBoard: React.FC<ForumBoardProps> = ({ user, language, posts }) => {
 
   const handleCreatePost = async () => {
     if (!newTitle || !newContent || !isSupabaseConfigured()) return;
+
+    const postId = `f-${Date.now()}`;
+    const newPost: ForumPost = {
+      id: postId,
+      authorId: user.id,
+      authorName: user.name,
+      title: newTitle,
+      content: newContent,
+      createdAt: new Date().toLocaleString(),
+      replies: []
+    };
+
+    // Update local state immediately
+    setPosts(prev => [newPost, ...prev]);
+
+    // Insert into database
     await supabase.from('forum_posts').insert([{
-      id: `f-${Date.now()}`,
+      id: postId,
       author_id: user.id,
       author_name: user.name,
       title: newTitle,
       content: newContent
     }]);
+
     setNewTitle('');
     setNewContent('');
     setShowForm(false);

@@ -228,7 +228,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, language, onToggleTheme, da
                 <CalendarDays size={24} />
               </div>
               <div className="text-left rtl:text-right">
-                <p className="font-bold text-slate-900 dark:text-white text-sm">Request Leave</p>
+                <p className="font-bold text-slate-900 dark:text-white text-sm">{t.requestLeave}</p>
                 <p className="text-[10px] text-slate-500">Portal submission</p>
               </div>
             </button>
@@ -385,20 +385,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user, language, onToggleTheme, da
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsLeaveModalOpen(false)}>
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold dark:text-white">Apply for Leave</h2>
+              <h2 className="text-xl font-bold dark:text-white">{t.applyForLeave}</h2>
               <button onClick={() => setIsLeaveModalOpen(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full active:scale-90 transition-all"><X size={24} className="text-slate-400" /></button>
             </div>
             <div className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase px-1">Type</label>
-                <select className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 outline-none dark:text-white" value={leaveForm.type} onChange={e => setLeaveForm({...leaveForm, type: e.target.value as any})}><option value="annual">Annual</option><option value="sick">Sick</option><option value="emergency">Emergency</option></select>
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1">{t.leaveType}</label>
+                <select className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 outline-none dark:text-white" value={leaveForm.type} onChange={e => setLeaveForm({...leaveForm, type: e.target.value as any})}>
+                  <option value="annual">{t.annual}</option>
+                  <option value="sick">{t.sick}</option>
+                  <option value="emergency">{t.emergency}</option>
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1">Start</label><input type="date" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 rounded-xl p-3 outline-none dark:text-white" value={leaveForm.startDate} onChange={e => setLeaveForm({...leaveForm, startDate: e.target.value})} /></div>
-                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1">End</label><input type="date" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 rounded-xl p-3 outline-none dark:text-white" value={leaveForm.endDate} onChange={e => setLeaveForm({...leaveForm, endDate: e.target.value})} /></div>
+                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1">{t.startDate}</label><input type="date" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 rounded-xl p-3 outline-none dark:text-white" value={leaveForm.startDate} onChange={e => setLeaveForm({...leaveForm, startDate: e.target.value})} /></div>
+                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1">{t.endDate}</label><input type="date" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 rounded-xl p-3 outline-none dark:text-white" value={leaveForm.endDate} onChange={e => setLeaveForm({...leaveForm, endDate: e.target.value})} /></div>
               </div>
-              <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1">Reason</label><textarea className="w-full h-24 bg-slate-50 dark:bg-slate-800 border border-slate-200 rounded-xl p-3 outline-none dark:text-white resize-none" value={leaveForm.reason} onChange={e => setLeaveForm({...leaveForm, reason: e.target.value})} /></div>
-              <button onClick={handleLeaveSubmit} className="w-full py-3.5 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 shadow-xl mt-2 transition-all active:scale-[0.98]">Submit Application</button>
+              <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase px-1">{t.leaveReason}</label><textarea className="w-full h-24 bg-slate-50 dark:bg-slate-800 border border-slate-200 rounded-xl p-3 outline-none dark:text-white resize-none" value={leaveForm.reason} onChange={e => setLeaveForm({...leaveForm, reason: e.target.value})} /></div>
+              <button onClick={handleLeaveSubmit} className="w-full py-3.5 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 shadow-xl mt-2 transition-all active:scale-[0.98]">{t.submitApplication}</button>
             </div>
           </div>
         </div>

@@ -2,20 +2,21 @@
 import React, { useState, useRef } from 'react';
 import { User, Language, DocFile, UserRole } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { 
-  FileText, 
-  Search, 
-  Plus, 
-  Eye, 
-  Trash2, 
-  X, 
-  Download, 
+import {
+  FileText,
+  Search,
+  Plus,
+  Eye,
+  Trash2,
+  X,
+  Download,
   UploadCloud,
   FileCheck,
   ShieldCheck,
   Calendar,
   User as UserIcon,
-  CheckCircle2
+  CheckCircle2,
+  ExternalLink
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -50,23 +51,62 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
   };
 
   const handleUpload = async () => {
-    if (!newDocName.trim() || !isSupabaseConfigured()) {
-      alert("Missing name or database connection.");
+    if (!newDocName.trim() || !selectedFile || !isSupabaseConfigured()) {
+      alert("Missing name, file, or database connection.");
       return;
     }
-    
-    const extensions: Record<string, string> = { 'PDF': '.pdf', 'XLS': '.xlsx', 'DOC': '.docx', 'IMG': '.jpg' };
-    const ext = extensions[newDocType] || '.pdf';
-    let finalName = newDocName;
-    if (!finalName.toLowerCase().endsWith(ext)) finalName = `${finalName}${ext}`;
 
-    await supabase.from('documents').insert([{
-      name: finalName,
-      type: newDocType,
-      uploaded_by: user.name
-    }]);
+    try {
+      // Upload file to Supabase Storage
+      const fileExt = selectedFile.name.split('.').pop();
+      const fileName = `${Date.now()}-${newDocName}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, selectedFile);
 
-    closeUploadModal();
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        alert('Failed to upload file. Please try again.');
+        return;
+      }
+
+      // Save document metadata to database
+      const { error: dbError } = await supabase.from('documents').insert([{
+        name: newDocName,
+        type: newDocType,
+        uploaded_by: user.name,
+        file_path: fileName,
+        file_size: selectedFile.size
+      }]);
+
+      if (dbError) {
+        console.error('Database error:', dbError);
+        // Clean up uploaded file if database insert fails
+        await supabase.storage.from('documents').remove([fileName]);
+        alert('Failed to save document metadata. Please try again.');
+        return;
+      }
+
+      // Refresh documents list
+      const { data: docsData } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
+      if (docsData) {
+        setDocs(docsData.map(doc => ({
+          id: doc.id,
+          name: doc.name,
+          type: doc.type,
+          uploadedBy: doc.uploaded_by,
+          date: new Date(doc.created_at).toLocaleDateString(),
+          filePath: doc.file_path,
+          fileSize: doc.file_size
+        })));
+      }
+
+      closeUploadModal();
+      alert('Document uploaded successfully!');
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload document. Please try again.');
+    }
   };
 
   const closeUploadModal = () => {
@@ -78,22 +118,116 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
 
   const deleteDoc = async (id: string) => {
     if (confirm("Remove this document from the portal?") && isSupabaseConfigured()) {
-      await supabase.from('documents').delete().eq('id', id);
+      try {
+        // First get the document to check if it has a file path
+        const { data: doc } = await supabase.from('documents').select('file_path').eq('id', id).single();
+
+        // Delete from database
+        const { error: dbError } = await supabase.from('documents').delete().eq('id', id);
+
+        if (dbError) {
+          console.error('Database delete error:', dbError);
+          alert('Failed to delete document metadata. Please try again.');
+          return;
+        }
+
+        // Delete file from storage if it exists
+        if (doc?.file_path) {
+          const { error: storageError } = await supabase.storage
+            .from('documents')
+            .remove([doc.file_path]);
+
+          if (storageError) {
+            console.error('Storage delete error:', storageError);
+            // Don't show error to user as the database record is already deleted
+          }
+        }
+
+        // Refresh documents list
+        const { data: docsData } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
+        if (docsData) {
+          setDocs(docsData.map(doc => ({
+            id: doc.id,
+            name: doc.name,
+            type: doc.type,
+            uploadedBy: doc.uploaded_by,
+            date: new Date(doc.created_at).toLocaleDateString(),
+            filePath: doc.file_path,
+            fileSize: doc.file_size
+          })));
+        }
+
+        alert('Document deleted successfully!');
+      } catch (error) {
+        console.error('Delete error:', error);
+        alert('Failed to delete document. Please try again.');
+      }
     }
   };
 
-  const handleDownload = (doc: DocFile) => {
-    // Improved simulation of file generation for demo purposes
-    const content = `AEROCONNECT SECURE DOCUMENT ACCESS\n\nFilename: ${doc.name}\nType: ${doc.type} MANUAL\nSecurity Level: INTERNAL\nAuthorized for: ${user.name} (${user.staffId})\nDownloaded on: ${new Date().toLocaleString()}\n\n[CONFIDENTIAL DOCUMENT CONTENT HASH: 8f9e2b1c]`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = doc.name.replace(/\.[^/.]+$/, "") + ".txt"; // Save as .txt for browser demo
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleDownload = async (doc: DocFile) => {
+    try {
+      if (doc.filePath) {
+        // Download actual file from Supabase Storage
+        const { data, error } = await supabase.storage
+          .from('documents')
+          .download(doc.filePath);
+
+        if (error) {
+          console.error('Download error:', error);
+          alert('Failed to download document. Please try again.');
+          return;
+        }
+
+        // Create download link
+        const url = URL.createObjectURL(data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        // Fallback to demo content if no file path
+        const content = `AEROCONNECT SECURE DOCUMENT ACCESS\n\nFilename: ${doc.name}\nType: ${doc.type} MANUAL\nSecurity Level: INTERNAL\nAuthorized for: ${user.name} (${user.staffId})\nDownloaded on: ${new Date().toLocaleString()}\n\n[CONFIDENTIAL DOCUMENT CONTENT HASH: 8f9e2b1c]`;
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.name.replace(/\.[^/.]+$/, "") + ".txt";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Failed to download document. Please try again.');
+    }
+  };
+
+  const handleOnlineView = async (doc: DocFile) => {
+    try {
+      if (doc.filePath) {
+        // Get public URL for online viewing
+        const { data } = supabase.storage
+          .from('documents')
+          .getPublicUrl(doc.filePath);
+
+        if (data?.publicUrl) {
+          // Open in new tab
+          window.open(data.publicUrl, '_blank', 'noopener,noreferrer');
+        } else {
+          alert('Failed to generate online view link. Please try downloading instead.');
+        }
+      } else {
+        alert('This document is not available for online viewing. Please download it instead.');
+      }
+    } catch (error) {
+      console.error('Online view error:', error);
+      alert('Failed to open document online. Please try downloading instead.');
+    }
   };
 
   const filteredDocs = docs.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -266,12 +400,15 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
                       outlined in section 4.2. Failure to comply may result in operational suspension."
                     </p>
                  </div>
-                 <div className="flex gap-3">
-                   <button onClick={() => handleDownload(viewingDoc)} className="flex-1 py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all">
-                     <Download size={18}/> Download Full File
+                 <div className="grid grid-cols-3 gap-3">
+                   <button onClick={() => handleOnlineView(viewingDoc)} className="py-4 bg-emerald-600 text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all">
+                     <ExternalLink size={18}/> View Online
                    </button>
-                   <button onClick={() => setViewingDoc(null)} className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold rounded-2xl active:scale-95 transition-all">
-                     Close Portal
+                   <button onClick={() => handleDownload(viewingDoc)} className="py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all">
+                     <Download size={18}/> Download
+                   </button>
+                   <button onClick={() => setViewingDoc(null)} className="py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold rounded-2xl active:scale-95 transition-all">
+                     Close
                    </button>
                  </div>
               </div>

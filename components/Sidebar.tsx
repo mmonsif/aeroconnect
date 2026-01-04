@@ -5,6 +5,7 @@ import { NavLink } from 'react-router';
 import { NAVIGATION_ITEMS, TRANSLATIONS, APP_NAME } from '../constants';
 import { User, Language, UserRole } from '../types';
 import { Plane, X, ShieldCheck, AlertCircle, Send, ShieldAlert } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface SidebarProps {
   user: User;
@@ -22,16 +23,63 @@ const Sidebar: React.FC<SidebarProps> = ({ user, language, isOpen, onClose, onBr
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
   const [broadcastMessage, setBroadcastMessage] = useState('');
 
-  const handleSendBroadcast = () => {
+  const handleSendBroadcast = async () => {
     if (!broadcastMessage.trim()) return;
-    onBroadcast(broadcastMessage);
-    setBroadcastMessage('');
-    setIsBroadcastModalOpen(false);
-    onClose();
+
+    try {
+      // Create broadcast alert in database
+      const { data: allUsers } = await supabase.from('users').select('id');
+      const recipientIds = allUsers?.map(u => u.id) || [];
+
+      const { data: broadcastData, error } = await supabase
+        .from('broadcast_alerts')
+        .insert([{
+          sender_id: user.id,
+          sender_name: user.name,
+          message: broadcastMessage,
+          recipients: recipientIds,
+          read_by: [user.id] // Sender automatically reads it
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Broadcast creation error:', error);
+        console.error('Error details:', error.message, error.details, error.hint);
+        alert(`Failed to send broadcast alert: ${error.message}`);
+        return;
+      }
+
+      // Call the existing onBroadcast callback for any additional handling
+      onBroadcast(broadcastMessage);
+
+      // Create notifications for all users
+      const notifications = recipientIds.map(userId => ({
+        id: `notif_${Date.now()}_${userId}`,
+        title: 'Emergency Broadcast',
+        message: broadcastMessage,
+        type: 'broadcast' as const,
+        severity: 'urgent' as const,
+        isRead: false,
+        timestamp: new Date()
+      }));
+
+      // Here you would typically send these notifications to a notification service
+      // For now, we'll just log them
+      console.log('Broadcast notifications created:', notifications);
+
+      setBroadcastMessage('');
+      setIsBroadcastModalOpen(false);
+      onClose();
+      alert('Emergency broadcast sent to all personnel!');
+    } catch (error) {
+      console.error('Broadcast error:', error);
+      alert('Failed to send broadcast. Please check your connection and try again.');
+    }
   };
 
   const sidebarClasses = `
-    fixed lg:sticky top-0 z-50 h-screen bg-slate-900 dark:bg-black text-white border-r border-slate-800 transition-all duration-300
+    fixed lg:relative lg:top-auto z-50 min-h-screen bg-slate-900 dark:bg-black text-white border-r border-slate-800 transition-all duration-300
     ${isOpen ? (isRTL ? 'right-0' : 'left-0') : (isRTL ? '-right-64' : '-left-64')}
     lg:left-0 lg:right-auto lg:translate-x-0 w-64 flex flex-col
   `;

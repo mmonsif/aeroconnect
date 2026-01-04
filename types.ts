@@ -101,14 +101,27 @@ export interface DocFile {
   type: string;
   uploadedBy: string;
   date: string;
+  filePath?: string;
+  fileSize?: number;
 }
 
 export interface AppNotification {
   id: string;
   title: string;
   message: string;
-  type: 'task' | 'safety' | 'doc' | 'leave' | 'forum';
+  type: 'task' | 'safety' | 'doc' | 'leave' | 'forum' | 'broadcast';
   severity: 'info' | 'urgent';
   isRead: boolean;
   timestamp: Date;
+}
+
+export interface BroadcastAlert {
+  id: string;
+  senderId: string;
+  senderName: string;
+  message: string;
+  timestamp: string;
+  status: 'active' | 'expired';
+  recipients: string[]; // Array of user IDs who received it
+  readBy: string[]; // Array of user IDs who read it
 }

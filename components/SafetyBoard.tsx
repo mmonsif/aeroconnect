@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { User, Language, SafetyReport } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { ShieldAlert, Send, Brain, AlertCircle, CheckCircle2, User as UserIcon, Lock, Sparkles } from 'lucide-react';
+import { ShieldAlert, Send, Brain, AlertCircle, CheckCircle2, User as UserIcon, Lock, Sparkles, Languages } from 'lucide-react';
 import { geminiService, SafetyAnalysisResponse } from '../services/gemini';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -13,12 +13,72 @@ interface SafetyBoardProps {
   setReports: React.Dispatch<React.SetStateAction<SafetyReport[]>>;
 }
 
-const SafetyBoard: React.FC<SafetyBoardProps> = ({ user, language, reports }) => {
+const SafetyBoard: React.FC<SafetyBoardProps> = ({ user, language, reports, setReports }) => {
   const t = TRANSLATIONS[language];
   const [reportText, setReportText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [analysis, setAnalysis] = useState<SafetyAnalysisResponse | null>(null);
+  const [selectedText, setSelectedText] = useState('');
+  const [showTranslatePopup, setShowTranslatePopup] = useState(false);
+  const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translatedText, setTranslatedText] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const handleSelection = () => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+
+      const selection = window.getSelection();
+      const selectedText = selection?.toString().trim();
+
+      if (selectedText && selectedText.length > 0) {
+        const range = selection?.getRangeAt(0);
+        const rect = range?.getBoundingClientRect();
+        if (rect) {
+          setSelectedText(selectedText);
+          setPopupPosition({
+            x: rect.left + rect.width / 2,
+            y: rect.top - 10
+          });
+          setShowTranslatePopup(true);
+        }
+      } else {
+        setShowTranslatePopup(false);
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (textareaRef.current && !textareaRef.current.contains(e.target as Node)) {
+        setShowTranslatePopup(false);
+      }
+    };
+
+    document.addEventListener('selectionchange', handleSelection);
+    document.addEventListener('click', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('selectionchange', handleSelection);
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, []);
+
+  const handleTranslate = async () => {
+    if (!selectedText.trim()) return;
+    setIsTranslating(true);
+    try {
+      const targetLang = language === 'ar' ? 'en' : 'ar';
+      const translated = await geminiService.translate(selectedText, targetLang);
+      setTranslatedText(translated);
+    } catch (error) {
+      console.error('Translation error:', error);
+      setTranslatedText('Translation failed');
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   const handleAnalyze = async () => {
     if (!reportText.trim()) return;
@@ -35,18 +95,47 @@ const SafetyBoard: React.FC<SafetyBoardProps> = ({ user, language, reports }) =>
 
   const handleSubmit = async () => {
     if (!reportText.trim() || !isSupabaseConfigured()) return;
-    
-    await supabase.from('safety_reports').insert([{
+
+    // Create full report text including AI analysis
+    let fullReport = reportText;
+    if (analysis) {
+      fullReport += '\n\n--- AI ANALYSIS REPORT ---\n';
+      fullReport += `Summary: ${analysis.summary}\n\n`;
+      if (analysis.entities.locations.length > 0) {
+        fullReport += `Locations: ${analysis.entities.locations.join(', ')}\n`;
+      }
+      if (analysis.entities.equipment.length > 0) {
+        fullReport += `Equipment: ${analysis.entities.equipment.join(', ')}\n`;
+      }
+      if (analysis.entities.personnel.length > 0) {
+        fullReport += `Personnel: ${analysis.entities.personnel.join(', ')}\n`;
+      }
+    }
+
+    const newReport: SafetyReport = {
       id: `R${Date.now()}`,
-      reporter_id: isAnonymous ? 'anonymous' : user.id,
+      reporterId: isAnonymous ? 'anonymous' : user.id,
       type: 'hazard',
-      description: reportText,
+      description: fullReport,
       severity: 'medium',
       status: 'open',
-      ai_analysis: analysis?.summary,
-      entities: analysis?.entities
+      aiAnalysis: analysis?.summary,
+      entities: analysis?.entities,
+      timestamp: new Date().toLocaleString()
+    };
+
+    await supabase.from('safety_reports').insert([{
+      id: newReport.id,
+      reporter_id: newReport.reporterId,
+      type: newReport.type,
+      description: newReport.description,
+      severity: newReport.severity,
+      status: newReport.status,
+      ai_analysis: newReport.aiAnalysis,
+      entities: newReport.entities
     }]);
 
+    setReports(prev => [newReport, ...prev]);
     setReportText('');
     setAnalysis(null);
     setIsAnonymous(false);
@@ -81,7 +170,44 @@ const SafetyBoard: React.FC<SafetyBoardProps> = ({ user, language, reports }) =>
           placeholder="Describe the hazard in detail (e.g., fuel spill near Stand 402, faulty GPU cable...)" 
           className="w-full h-40 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-4 dark:text-white outline-none ring-2 ring-transparent focus:ring-red-500 transition-all" 
         />
-        
+
+        {/* Translation Popup */}
+        {showTranslatePopup && (
+          <div
+            className="fixed z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 animate-in fade-in zoom-in-95 duration-200"
+            style={{
+              left: `${popupPosition.x}px`,
+              top: `${popupPosition.y}px`,
+              transform: 'translate(-50%, -100%)'
+            }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Languages size={16} className="text-blue-500" />
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">
+                Translate to {language === 'ar' ? 'English' : 'العربية'}
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500 italic">"{selectedText}"</p>
+
+              {translatedText && (
+                <div className="border-t pt-2">
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{translatedText}</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleTranslate}
+                disabled={isTranslating}
+                className="w-full py-2 bg-blue-500 text-white text-xs font-bold rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                {isTranslating ? 'Translating...' : `Translate to ${language === 'ar' ? 'English' : 'العربية'}`}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-3">
           <button 
             onClick={handleAnalyze} 
