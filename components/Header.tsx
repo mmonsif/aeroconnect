@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { User, Language, AppNotification } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { Bell, Search, Languages, Menu, Check, Trash2, Clock, LogOut } from 'lucide-react';
+// Changed import from react-router-dom to react-router to resolve missing export errors
+import { useNavigate } from 'react-router';
 
 interface HeaderProps {
   user: User;
@@ -16,18 +18,19 @@ interface HeaderProps {
   onLogout: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ 
-  user, 
-  language, 
-  onToggleLanguage, 
-  onToggleSidebar, 
-  searchQuery, 
+const Header: React.FC<HeaderProps> = ({
+  user,
+  language,
+  onToggleLanguage,
+  onToggleSidebar,
+  searchQuery,
   onSearchChange,
   notifications,
   setNotifications,
   onLogout
 }) => {
   const t = TRANSLATIONS[language];
+  const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
   const unreadCount = notifications.filter(n => !n.isRead).length;
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -48,6 +51,35 @@ const Header: React.FC<HeaderProps> = ({
 
   const markAsRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+  };
+
+  const handleNotificationClick = (notification: AppNotification) => {
+    markAsRead(notification.id);
+    setShowNotifications(false);
+
+    // Navigate based on notification type
+    switch (notification.type) {
+      case 'task':
+        navigate('/tasks');
+        break;
+      case 'safety':
+        navigate('/safety');
+        break;
+      case 'doc':
+        navigate('/manuals');
+        break;
+      case 'leave':
+        navigate('/admin?tab=leave');
+        break;
+      case 'forum':
+        navigate('/forum');
+        break;
+      case 'broadcast':
+        // Broadcasts might not have a specific page, stay on current page
+        break;
+      default:
+        break;
+    }
   };
 
   const clearNotifications = () => {
@@ -102,7 +134,7 @@ const Header: React.FC<HeaderProps> = ({
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-3 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+            <div className="absolute right-0 sm:right-0 left-0 sm:left-auto mt-3 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
               <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <h3 className="font-bold text-sm dark:text-white">Notifications</h3>
                 <div className="flex gap-2">
@@ -113,9 +145,9 @@ const Header: React.FC<HeaderProps> = ({
               <div className="max-h-96 overflow-y-auto">
                 {notifications.length > 0 ? (
                   notifications.map(n => (
-                    <div 
-                      key={n.id} 
-                      onClick={() => markAsRead(n.id)}
+                    <div
+                      key={n.id}
+                      onClick={() => handleNotificationClick(n)}
                       className={`p-4 border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors relative ${!n.isRead ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''}`}
                     >
                       {!n.isRead && <div className="absolute left-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-blue-500 rounded-full"></div>}
