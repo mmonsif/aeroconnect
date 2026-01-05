@@ -2,9 +2,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { User, Language, ChatMessage } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { 
-  Send, CheckCheck, Check, Phone, Video, 
-  Search, ChevronLeft, AlertCircle, 
+import {
+  Send, CheckCheck, Check,
+  Search, ChevronLeft, AlertCircle,
   X, UserPlus, Users, MessageSquare
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -198,10 +198,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button className="p-2.5 text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Phone size={18}/></button>
-                <button className="p-2.5 text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Video size={18}/></button>
-              </div>
+
             </div>
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 custom-scrollbar">

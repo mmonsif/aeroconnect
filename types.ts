@@ -38,6 +38,7 @@ export interface Task {
 export interface SafetyReport {
   id: string;
   reporterId: string;
+  reporterName?: string;
   type: 'near_miss' | 'incident' | 'hazard' | 'equipment';
   description: string;
   translation?: string;
@@ -45,6 +46,7 @@ export interface SafetyReport {
   severity: 'low' | 'medium' | 'high';
   status: 'open' | 'investigating' | 'resolved';
   timestamp: string;
+  imageUrls?: string[];
   entities?: {
     locations: string[];
     equipment: string[];

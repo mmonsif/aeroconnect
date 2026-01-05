@@ -108,11 +108,20 @@ const App: React.FC = () => {
         id: d.id, name: d.name, type: d.type, uploadedBy: d.uploaded_by, date: new Date(d.created_at).toISOString().split('T')[0]
       })));
 
-      if (safetyData) setSafetyReports(safetyData.map(r => ({
-        id: r.id, reporterId: r.reporter_id, type: r.type, description: r.description,
-        severity: r.severity, status: r.status, aiAnalysis: r.ai_analysis, entities: r.entities,
-        timestamp: new Date(r.created_at).toLocaleString()
-      })));
+      if (safetyData) setSafetyReports(safetyData.map(r => {
+        let reporterName = r.reporter_name;
+        if (!reporterName && r.reporter_id !== 'anonymous') {
+          const user = userData?.find(u => u.id === r.reporter_id);
+          reporterName = user?.name;
+        }
+        return {
+          id: r.id, reporterId: r.reporter_id, type: r.type, description: r.description,
+          severity: r.severity, status: r.status, aiAnalysis: r.ai_analysis, entities: r.entities,
+          timestamp: new Date(r.created_at).toLocaleString(),
+          imageUrls: r.images || [],
+          reporterName
+        };
+      }));
 
       if (leaveData) setLeaveRequests(leaveData.map(l => ({
         id: l.id, staffId: l.staff_id, staffName: l.staff_name, type: l.type,

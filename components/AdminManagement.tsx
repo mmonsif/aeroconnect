@@ -4,16 +4,16 @@ import { User, Language, UserRole, LeaveRequest, DocFile, SafetyReport, Task } f
 import { TRANSLATIONS } from '../constants';
 // Changed import from react-router-dom to react-router to resolve missing export errors
 import { useLocation } from 'react-router';
-import { 
-  Users as UsersIcon, 
-  Calendar, 
-  ShieldCheck, 
-  Check, 
-  Plus, 
+import {
+  Users as UsersIcon,
+  Calendar,
+  ShieldCheck,
+  Check,
+  Plus,
   Clock,
   Edit,
   Trash2,
-  Key, 
+  Key,
   Power,
   PowerOff,
   UserPlus,
@@ -24,9 +24,11 @@ import {
   ShieldPlus,
   GitGraph,
   UserCheck,
-  RefreshCcw
+  RefreshCcw,
+  CheckSquare
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import TaskBoard from './TaskBoard';
 
 interface AdminManagementProps {
   user: User;
@@ -40,6 +42,7 @@ interface AdminManagementProps {
     departments: string[];
     roles: string[];
   };
+  setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   setLeaveRequests: React.Dispatch<React.SetStateAction<LeaveRequest[]>>;
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
   setSafetyReports: React.Dispatch<React.SetStateAction<SafetyReport[]>>;
@@ -74,6 +77,7 @@ const AdminManagement: React.FC<AdminManagementProps> = ({
           { id: 'users', label: t.userManagement, icon: <UsersIcon size={16}/> },
           { id: 'leave', label: t.leaveRequests, icon: <Calendar size={16}/> },
           { id: 'safety', label: t.safetyReview, icon: <ShieldCheck size={16}/> },
+          { id: 'tasks', label: 'Task Management', icon: <CheckSquare size={16}/> },
           { id: 'org', label: 'Organization', icon: <Layers size={16}/> },
         ].map(tab => (
           <button
@@ -88,7 +92,8 @@ const AdminManagement: React.FC<AdminManagementProps> = ({
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm min-h-[400px]">
         {activeTab === 'users' && <UserManagement users={data.users} setUsers={setUsers} departments={data.departments} roles={data.roles} isAdmin={user.role === UserRole.ADMIN} />}
         {activeTab === 'leave' && <LeaveManagementForm currentUser={user} requests={data.leaveRequests} setRequests={setLeaveRequests} language={language} users={data.users} />}
-        {activeTab === 'safety' && <SafetyReview reports={data.safetyReports} setReports={setSafetyReports} />}
+        {activeTab === 'safety' && <SafetyReview reports={data.safetyReports} setReports={setSafetyReports} users={data.users} />}
+        {activeTab === 'tasks' && <TaskBoard currentUser={user} tasks={data.tasks} users={data.users} />}
         {activeTab === 'org' && <OrgStructureManagement users={data.users} setUsers={setUsers} departments={data.departments} roles={data.roles} setDepartments={setDepartments} setRoles={setRoles} />}
       </div>
     </div>
@@ -585,12 +590,12 @@ const LeaveManagementForm = ({ currentUser, requests, setRequests, language, use
   );
 };
 
-const SafetyReview = ({ reports, setReports }: { reports: SafetyReport[], setReports: any }) => {
+const SafetyReview = ({ reports, setReports, users }: { reports: SafetyReport[], setReports: any, users: User[] }) => {
   const updateStatus = async (id: string, status: SafetyReport['status']) => {
     if (!isSupabaseConfigured()) return;
     const { error } = await supabase.from('safety_reports').update({ status }).eq('id', id);
     if (!error) {
-      setReports(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+      setReports(prev => prev.map(r => r.id === id ? { ...r, status, imageUrls: r.imageUrls, reporterName: r.reporterName } : r));
     } else {
       console.error("Status update error:", error);
     }
@@ -606,8 +611,8 @@ const SafetyReview = ({ reports, setReports }: { reports: SafetyReport[], setRep
                 {rep.severity} SEVERITY
               </span>
               <span className={`px-2 py-1 text-[10px] font-black rounded-lg uppercase ${
-                rep.status === 'resolved' ? 'bg-emerald-50 text-emerald-600' : 
-                rep.status === 'investigating' ? 'bg-orange-50 text-orange-600' : 
+                rep.status === 'resolved' ? 'bg-emerald-50 text-emerald-600' :
+                rep.status === 'investigating' ? 'bg-orange-50 text-orange-600' :
                 'bg-slate-100 dark:bg-slate-800 text-slate-500'
               }`}>
                 {rep.status}
@@ -618,19 +623,52 @@ const SafetyReview = ({ reports, setReports }: { reports: SafetyReport[], setRep
             </div>
           </div>
           <p className="font-bold dark:text-white leading-snug">{rep.description}</p>
-          
+
+          {/* Display attached images */}
+          {rep.imageUrls && rep.imageUrls.length > 0 && (
+            <div className="flex flex-wrap gap-2 py-3">
+              {rep.imageUrls.map((url, index) => (
+                <img
+                  key={index}
+                  src={url}
+                  alt={`Safety report image ${index + 1}`}
+                  className="w-16 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => window.open(url, '_blank')}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Reporter information */}
+          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+            <span>Reporter:</span>
+            {rep.reporterId === 'anonymous' ? (
+              <span>Anonymous Staff</span>
+            ) : (() => {
+              const reporter = users.find(u => u.id === rep.reporterId);
+              return reporter ? (
+                <div className="flex items-center gap-2">
+                  <img src={reporter.avatar} className="w-4 h-4 rounded-full" alt="" />
+                  <span>{reporter.name}</span>
+                </div>
+              ) : (
+                <span>Registered Member</span>
+              );
+            })()}
+          </div>
+
           <div className="flex gap-2 mt-4 pt-4 border-t border-slate-50 dark:border-slate-800">
             {rep.status === 'open' && (
-              <button 
+              <button
                 onClick={() => updateStatus(rep.id, 'investigating')}
                 className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 active:scale-95"
               >
                 Investigate
               </button>
             )}
-            
+
             {rep.status !== 'resolved' ? (
-              <button 
+              <button
                 onClick={() => updateStatus(rep.id, 'resolved')}
                 className="flex-1 py-2.5 bg-slate-900 dark:bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-colors active:scale-95"
               >
@@ -638,7 +676,7 @@ const SafetyReview = ({ reports, setReports }: { reports: SafetyReport[], setRep
                 Mark Resolved
               </button>
             ) : (
-              <button 
+              <button
                 onClick={() => updateStatus(rep.id, 'open')}
                 className="flex-1 py-2.5 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-700 transition-colors shadow-lg shadow-orange-500/20 active:scale-95"
               >

@@ -125,7 +125,24 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
     task.assignedTo === user.name || 
     ((user.role === UserRole.MANAGER || user.role === UserRole.SUPERVISOR) && task.department === user.department);
 
-  const filteredTasks = tasks.filter(t => filter === 'all' || t.status === filter);
+  const filteredTasks = tasks.filter(t => {
+    // Status filter
+    const matchesStatus = filter === 'all' || t.status === filter;
+
+    // Role-based access control
+    let canView = false;
+    if (user.role === UserRole.ADMIN) {
+      canView = true; // Admin sees all tasks
+    } else if (user.role === UserRole.MANAGER || user.role === UserRole.SUPERVISOR) {
+      // Manager sees tasks from their department and their own tasks
+      canView = t.department === user.department || t.assignedTo === user.name;
+    } else if (user.role === UserRole.STAFF) {
+      // Staff sees only their own tasks
+      canView = t.assignedTo === user.name;
+    }
+
+    return matchesStatus && canView;
+  });
 
   const getStatusColor = (status: Task['status']) => {
     switch(status) {

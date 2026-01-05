@@ -8,15 +8,9 @@ import {
   Plus,
   Eye,
   Trash2,
-  X,
   Download,
   UploadCloud,
-  FileCheck,
-  ShieldCheck,
-  Calendar,
-  User as UserIcon,
-  CheckCircle2,
-  ExternalLink
+  FileCheck
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -30,7 +24,7 @@ interface ManualsBoardProps {
 const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDocs }) => {
   const t = TRANSLATIONS[language];
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [viewingDoc, setViewingDoc] = useState<DocFile | null>(null);
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [newDocName, setNewDocName] = useState('');
   const [newDocType, setNewDocType] = useState('PDF');
@@ -87,7 +81,19 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
         return;
       }
 
-      // Refresh documents list
+      // Immediately add the new document to the local state for instant UI update
+      const newDoc = {
+        id: 'temp-' + Date.now(), // Temporary ID until real data loads
+        name: newDocName,
+        type: newDocType,
+        uploadedBy: user.name,
+        date: new Date().toLocaleDateString(),
+        filePath: fileName,
+        fileSize: selectedFile.size
+      };
+      setDocs(prev => [newDoc, ...prev]);
+
+      // Refresh documents list from server in background
       const { data: docsData } = await supabase.from('documents').select('*').order('created_at', { ascending: false });
       if (docsData) {
         setDocs(docsData.map(doc => ({
@@ -174,10 +180,14 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
           .getPublicUrl(doc.filePath);
 
         if (data?.publicUrl) {
+          // Extract original file extension from filePath
+          const fileExtension = doc.filePath.split('.').pop()?.toLowerCase() || '';
+          const downloadName = `${doc.name}.${fileExtension}`;
+
           // Create download link using public URL
           const a = document.createElement('a');
           a.href = data.publicUrl;
-          a.download = doc.name;
+          a.download = downloadName;
           a.target = '_blank'; // Open in new tab to avoid CORS issues
           document.body.appendChild(a);
           a.click();
@@ -192,7 +202,7 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = doc.name.replace(/\.[^/.]+$/, "") + ".txt";
+        a.download = `${doc.name}.txt`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -281,8 +291,8 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setViewingDoc(doc)} 
+                <button
+                  onClick={() => handleOnlineView(doc)}
                   className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-all"
                 >
                   <Eye size={18} />
@@ -369,49 +379,7 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
         </div>
       )}
 
-      {viewingDoc && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in">
-           <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl">
-              <div className="p-6 bg-slate-50 dark:bg-slate-800 flex items-center justify-between border-b dark:border-slate-700">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg"><FileText size={24}/></div>
-                  <div>
-                    <h3 className="text-xl font-black uppercase tracking-tighter dark:text-white">{viewingDoc.name}</h3>
-                    <p className="text-xs text-slate-500">Document Meta Analysis • EGY-SOP System</p>
-                  </div>
-                </div>
-                <button onClick={() => setViewingDoc(null)} className="p-2 hover:bg-white rounded-full transition-all"><X size={24} className="text-slate-400"/></button>
-              </div>
-              <div className="p-8 space-y-6">
-                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                   <MetaItem icon={<ShieldCheck size={14}/>} label="Status" value="Verified" color="emerald"/>
-                   <MetaItem icon={<Calendar size={14}/>} label="Date" value={viewingDoc.date} color="blue"/>
-                   <MetaItem icon={<UserIcon size={14}/>} label="Author" value={viewingDoc.uploadedBy} color="purple"/>
-                   <MetaItem icon={<CheckCircle2 size={14}/>} label="Revision" value="v2.4.1" color="indigo"/>
-                 </div>
-                 <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
-                    <p className="text-sm font-bold dark:text-white mb-2 uppercase tracking-widest text-[10px] text-slate-400">Hub Summary</p>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed italic">
-                      "This document contains standard operating procedures for airport ground personnel. 
-                      Internal use only. All personnel must strictly adhere to the safety guidelines 
-                      outlined in section 4.2. Failure to comply may result in operational suspension."
-                    </p>
-                 </div>
-                 <div className="grid grid-cols-3 gap-3">
-                   <button onClick={() => handleOnlineView(viewingDoc)} className="py-4 bg-emerald-600 text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all">
-                     <ExternalLink size={18}/> View Online
-                   </button>
-                   <button onClick={() => handleDownload(viewingDoc)} className="py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all">
-                     <Download size={18}/> Download
-                   </button>
-                   <button onClick={() => setViewingDoc(null)} className="py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold rounded-2xl active:scale-95 transition-all">
-                     Close
-                   </button>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
+
     </div>
   );
 };
