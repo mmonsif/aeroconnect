@@ -193,10 +193,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user, language, onToggleTheme, da
   const getVisibleTasks = () => {
     return data.tasks.filter(task => {
       if (user.role === UserRole.ADMIN) return true;
-      if (user.role === UserRole.MANAGER || user.role === UserRole.SUPERVISOR) {
-        return task.department === user.department;
+      // Find the assigned user
+      const assignedUser = data.users.find(u => u.name === task.assignedTo);
+      if (assignedUser) {
+        if (user.role === UserRole.STAFF) {
+          // Staff sees only their own tasks
+          return task.assignedTo === user.name;
+        } else if (user.role === UserRole.MANAGER || user.role === UserRole.SUPERVISOR) {
+          // Manager sees tasks assigned to them, or tasks where they are the manager of the assigned user in the same department
+          return task.assignedTo === user.name ||
+                 (assignedUser.managerId === user.id && assignedUser.department === user.department);
+        }
       }
-      return task.assignedTo === user.name;
+      return false;
     });
   };
 
