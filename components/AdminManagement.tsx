@@ -77,7 +77,6 @@ const AdminManagement: React.FC<AdminManagementProps> = ({
           { id: 'users', label: t.userManagement, icon: <UsersIcon size={16}/> },
           { id: 'leave', label: t.leaveRequests, icon: <Calendar size={16}/> },
           { id: 'safety', label: t.safetyReview, icon: <ShieldCheck size={16}/> },
-          { id: 'tasks', label: 'Task Management', icon: <CheckSquare size={16}/> },
           { id: 'org', label: 'Organization', icon: <Layers size={16}/> },
         ].map(tab => (
           <button

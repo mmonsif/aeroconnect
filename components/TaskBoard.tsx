@@ -133,12 +133,19 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
     let canView = false;
     if (user.role === UserRole.ADMIN) {
       canView = true; // Admin sees all tasks
-    } else if (user.role === UserRole.MANAGER || user.role === UserRole.SUPERVISOR) {
-      // Manager sees tasks from their department and their own tasks
-      canView = t.department === user.department || t.assignedTo === user.name;
-    } else if (user.role === UserRole.STAFF) {
-      // Staff sees only their own tasks
-      canView = t.assignedTo === user.name;
+    } else {
+      // Find the assigned user
+      const assignedUser = users.find(u => u.name === t.assignedTo);
+      if (assignedUser) {
+        if (user.role === UserRole.STAFF) {
+          // Staff sees only their own tasks
+          canView = t.assignedTo === user.name;
+        } else if (user.role === UserRole.MANAGER || user.role === UserRole.SUPERVISOR) {
+          // Manager sees tasks assigned to them, or tasks where they are the manager of the assigned user in the same department
+          canView = t.assignedTo === user.name ||
+                   (assignedUser.managerId === user.id && assignedUser.department === user.department);
+        }
+      }
     }
 
     return matchesStatus && canView;
