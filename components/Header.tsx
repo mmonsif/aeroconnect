@@ -74,6 +74,9 @@ const Header: React.FC<HeaderProps> = ({
       case 'forum':
         navigate('/forum');
         break;
+      case 'message':
+        navigate('/messages');
+        break;
       case 'broadcast':
         // Broadcasts might not have a specific page, stay on current page
         break;

@@ -111,7 +111,7 @@ export interface AppNotification {
   id: string;
   title: string;
   message: string;
-  type: 'task' | 'safety' | 'doc' | 'leave' | 'forum' | 'broadcast';
+  type: 'task' | 'safety' | 'doc' | 'leave' | 'forum' | 'message' | 'broadcast';
   severity: 'info' | 'urgent';
   isRead: boolean;
   timestamp: Date;

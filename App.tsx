@@ -144,7 +144,7 @@ const App: React.FC = () => {
 
       if (messageData) setGlobalMessages(messageData.map(m => ({
         id: m.id, senderId: m.sender_id, recipientId: m.recipient_id, senderName: m.sender_name,
-        text: m.text, status: m.status, timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        text: m.text, status: m.status, timestamp: new Date(m.created_at).toISOString()
       })));
 
       if (broadcastData) setBroadcastAlerts(broadcastData.map(b => ({
@@ -192,11 +192,11 @@ const App: React.FC = () => {
             if (m.sender_id === currentUser.id) return;
             if (m.recipient_id === currentUser.id || m.recipient_id === BROADCAST_ID) {
               const isEmergency = m.recipient_id === BROADCAST_ID;
-              addNotification({ 
-                title: isEmergency ? "🚨 EMERGENCY BROADCAST" : "New Secure Message", 
-                message: m.text, 
-                type: isEmergency ? 'safety' : 'forum', 
-                severity: isEmergency ? 'urgent' : 'info' 
+              addNotification({
+                title: isEmergency ? "🚨 EMERGENCY BROADCAST" : "New Secure Message",
+                message: m.text,
+                type: isEmergency ? 'safety' : 'message',
+                severity: isEmergency ? 'urgent' : 'info'
               });
             }
           }
