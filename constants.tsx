@@ -56,7 +56,8 @@ export const TRANSLATIONS = {
     submitApplication: "Submit Application",
     annual: "Annual",
     sick: "Sick",
-    emergency: "Emergency"
+    emergency: "Emergency",
+    broadcastHistory: "Broadcast History"
   },
   ar: {
     dashboard: "لوحة القيادة",
@@ -97,7 +98,8 @@ export const TRANSLATIONS = {
     submitApplication: "تقديم الطلب",
     annual: "سنوية",
     sick: "مرضية",
-    emergency: "طارئة"
+    emergency: "طارئة",
+    broadcastHistory: "تاريخ البث"
   }
 };
 
@@ -108,5 +110,6 @@ export const NAVIGATION_ITEMS = [
   { id: 'my-leave', label: 'myleave', icon: <CalendarDays size={20} /> },
   { id: 'forum', label: 'forum', icon: <MessageSquare size={20} /> },
   { id: 'messages', label: 'messages', icon: <MessageCircle size={20} /> },
+  { id: 'broadcast-history', label: 'broadcastHistory', icon: <AlertTriangle size={20} />, restricted: true },
   { id: 'admin', label: 'admin', icon: <Briefcase size={20} />, restricted: true },
 ];

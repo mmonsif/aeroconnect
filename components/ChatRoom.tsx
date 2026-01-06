@@ -209,9 +209,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
                     <div className={`max-w-[75%] p-3 rounded-2xl shadow-sm relative ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-tl-none border border-slate-100 dark:border-slate-700'}`}>
                       <p className="text-sm leading-relaxed">{m.text}</p>
                       <div className={`flex items-center justify-end gap-1 mt-1 ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
-                        <span className="text-[9px] font-bold">{m.timestamp}</span>
+                        <span className="text-[9px] font-bold">{new Date(m.timestamp).toLocaleDateString()} {m.timestamp}</span>
                         {isMe && (
-                          m.status === 'read' 
+                          m.status === 'read'
                             ? <CheckCheck size={12} className="text-blue-300" />
                             : <Check size={12} className="opacity-50" />
                         )}

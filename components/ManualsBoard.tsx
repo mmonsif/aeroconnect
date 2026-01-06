@@ -188,7 +188,7 @@ const ManualsBoard: React.FC<ManualsBoardProps> = ({ user, language, docs, setDo
           const a = document.createElement('a');
           a.href = data.publicUrl;
           a.download = downloadName;
-          a.target = '_blank'; // Open in new tab to avoid CORS issues
+          // Remove target to allow proper download instead of opening in new tab
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);

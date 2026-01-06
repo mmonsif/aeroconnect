@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 // Changed import from react-router-dom to react-router to resolve missing export errors
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router';
-import { UserRole, Language, User, Task, SafetyReport, DocFile, ForumPost, LeaveRequest, AppNotification, ChatMessage } from './types';
+import { UserRole, Language, User, Task, SafetyReport, DocFile, ForumPost, LeaveRequest, AppNotification, ChatMessage, BroadcastAlert } from './types';
 import { TRANSLATIONS } from './constants';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -14,6 +14,7 @@ import ForumBoard from './components/ForumBoard';
 import AdminManagement from './components/AdminManagement';
 import ManualsBoard from './components/ManualsBoard';
 import MyLeaveBoard from './components/MyLeaveBoard';
+import BroadcastHistory from './components/BroadcastHistory';
 import Login from './components/Login';
 import ChangePassword from './components/ChangePassword';
 import { X, Sparkles } from 'lucide-react';
@@ -50,6 +51,7 @@ const App: React.FC = () => {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [docs, setDocs] = useState<DocFile[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [broadcastAlerts, setBroadcastAlerts] = useState<BroadcastAlert[]>([]);
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -80,7 +82,8 @@ const App: React.FC = () => {
         { data: safetyData },
         { data: leaveData },
         { data: postsData },
-        { data: messageData }
+        { data: messageData },
+        { data: broadcastData }
       ] = await Promise.all([
         supabase.from('users').select('*'),
         supabase.from('tasks').select('*').order('created_at', { ascending: false }),
@@ -88,7 +91,8 @@ const App: React.FC = () => {
         supabase.from('safety_reports').select('*').order('created_at', { ascending: false }),
         supabase.from('leave_requests').select('*').order('created_at', { ascending: false }),
         supabase.from('forum_posts').select('*, forum_replies(*)').order('created_at', { ascending: false }),
-        supabase.from('messages').select('*').order('created_at', { ascending: true })
+        supabase.from('messages').select('*').order('created_at', { ascending: true }),
+        supabase.from('broadcast_alerts').select('*').order('created_at', { ascending: false })
       ]);
 
       if (userData) setUsers(userData.map(u => ({
@@ -105,7 +109,8 @@ const App: React.FC = () => {
       })));
 
       if (docData) setDocs(docData.map(d => ({
-        id: d.id, name: d.name, type: d.type, uploadedBy: d.uploaded_by, date: new Date(d.created_at).toISOString().split('T')[0]
+        id: d.id, name: d.name, type: d.type, uploadedBy: d.uploaded_by, date: new Date(d.created_at).toISOString().split('T')[0],
+        filePath: d.file_path, fileSize: d.file_size
       })));
 
       if (safetyData) setSafetyReports(safetyData.map(r => {
@@ -140,6 +145,11 @@ const App: React.FC = () => {
       if (messageData) setGlobalMessages(messageData.map(m => ({
         id: m.id, senderId: m.sender_id, recipientId: m.recipient_id, senderName: m.sender_name,
         text: m.text, status: m.status, timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      })));
+
+      if (broadcastData) setBroadcastAlerts(broadcastData.map(b => ({
+        id: b.id, senderId: b.sender_id, senderName: b.sender_name, message: b.message,
+        recipients: b.recipients, readBy: b.read_by, timestamp: new Date(b.created_at).toLocaleString()
       })));
     } catch (err) {
       console.warn("Operational data sync incomplete. Check Supabase schema.", err);
@@ -223,7 +233,7 @@ const App: React.FC = () => {
           }
           syncAllData();
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'documents' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, (payload) => {
           const d = payload.new as any;
           if (d.uploaded_by === currentUser.name) return;
           addNotification({
@@ -415,6 +425,7 @@ const App: React.FC = () => {
               <Route path="/messages" element={<ChatRoom user={currentUser!} language={language} users={users} globalMessages={globalMessages} setGlobalMessages={setGlobalMessages} />} />
               <Route path="/manuals" element={<ManualsBoard user={currentUser!} language={language} docs={docs} setDocs={setDocs} />} />
               <Route path="/my-leave" element={<MyLeaveBoard user={currentUser!} language={language} requests={leaveRequests} setRequests={setLeaveRequests} />} />
+              <Route path="/broadcast-history" element={<BroadcastHistory user={currentUser!} language={language} broadcastAlerts={broadcastAlerts} />} />
               <Route path="/admin" element={<AdminManagement user={currentUser!} language={language} data={{ tasks, safetyReports, docs, leaveRequests, users, departments, roles: availableRoles }} setLeaveRequests={setLeaveRequests} setUsers={setUsers} setSafetyReports={setSafetyReports} setDocs={setDocs} setDepartments={setDepartments} setRoles={setAvailableRoles} />} />
             </Routes>
           </main>
