@@ -302,6 +302,52 @@ const App: React.FC = () => {
     return globalMessages.filter(m => m.recipientId === currentUser.id && m.status !== 'read').length;
   }, [globalMessages, currentUser]);
 
+  const visibleTasks = useMemo(() => {
+    if (!currentUser) return [];
+    return tasks.filter(task => {
+      if (currentUser.role === UserRole.ADMIN) {
+        return true;
+      } else if (currentUser.role === UserRole.SAFETY_MANAGER) {
+        return true;
+      } else if (currentUser.role === UserRole.STAFF) {
+        return task.assignedTo.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+      } else if (currentUser.role === UserRole.MANAGER || currentUser.role === UserRole.SUPERVISOR) {
+        return task.department === currentUser.department;
+      }
+      return false;
+    });
+  }, [tasks, currentUser]);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery || !currentUser) return null;
+    const q = searchQuery.toLowerCase();
+    return {
+      tasks: visibleTasks.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        t.description.toLowerCase().includes(q) ||
+        t.location.toLowerCase().includes(q)
+      ),
+      docs: docs.filter(d =>
+        d.name.toLowerCase().includes(q)
+      ),
+      staff: users.filter(u =>
+        u.name.toLowerCase().includes(q) ||
+        u.staffId.toLowerCase().includes(q) ||
+        u.department.toLowerCase().includes(q)
+      ),
+      leave: leaveRequests.filter(l => {
+        const isOwner = l.staffId === currentUser.staffId;
+        const isPrivileged = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.MANAGER;
+        if (!isOwner && !isPrivileged) return false;
+        return l.staffName.toLowerCase().includes(q) || l.reason.toLowerCase().includes(q) || l.type.toLowerCase().includes(q);
+      }),
+      reports: safetyReports.filter(r =>
+        r.description.toLowerCase().includes(q) ||
+        r.type.toLowerCase().includes(q)
+      ),
+    };
+  }, [searchQuery, visibleTasks, docs, users, leaveRequests, safetyReports, currentUser]);
+
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     if (user.mustChangePassword) { setNeedsPasswordChange(true); } else { setIsLoggedIn(true); }
@@ -409,10 +455,11 @@ const App: React.FC = () => {
           )}
 
           {currentUser && (
-            <Header 
+            <Header
               user={currentUser} language={language} onToggleLanguage={() => setLanguage(l => l === 'en' ? 'ar' : 'en')}
               onToggleSidebar={toggleSidebar} searchQuery={searchQuery} onSearchChange={setSearchQuery}
               notifications={notifications} setNotifications={setNotifications} onLogout={handleLogout}
+              searchResults={searchResults}
             />
           )}
           <main className="flex-1 p-4 md:p-6 overflow-y-auto">

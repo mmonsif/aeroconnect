@@ -25,7 +25,9 @@ import {
   GitGraph,
   UserCheck,
   RefreshCcw,
-  CheckSquare
+  CheckSquare,
+  Upload,
+  Camera
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import TaskBoard from './TaskBoard';
@@ -76,7 +78,7 @@ const AdminManagement: React.FC<AdminManagementProps> = ({
         {[
           { id: 'users', label: t.userManagement, icon: <UsersIcon size={16}/> },
           { id: 'leave', label: t.leaveRequests, icon: <Calendar size={16}/> },
-          { id: 'safety', label: t.safetyReview, icon: <ShieldCheck size={16}/> },
+          ...(user.role === UserRole.ADMIN || user.role === UserRole.SAFETY_MANAGER ? [{ id: 'safety', label: t.safetyReview, icon: <ShieldCheck size={16}/> }] : []),
           { id: 'org', label: 'Organization', icon: <Layers size={16}/> },
         ].map(tab => (
           <button
@@ -105,20 +107,45 @@ const UserManagement = ({ users, setUsers, departments, roles, isAdmin }: { user
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [targetUser, setTargetUser] = useState<User | null>(null);
   
-  const [form, setForm] = useState({ 
-    name: '', 
-    staffId: '', 
-    username: '', 
-    password: '', 
-    role: UserRole.STAFF as string, 
+  const [form, setForm] = useState({
+    name: '',
+    staffId: '',
+    username: '',
+    password: '',
+    role: UserRole.STAFF as string,
     department: departments[0] || 'Operations',
-    status: 'active' as 'active' | 'inactive'
+    status: 'active' as 'active' | 'inactive',
+    avatar: null as File | null,
+    avatarPreview: ''
   });
 
   const [newPassword, setNewPassword] = useState('');
 
   const handleSaveUser = async () => {
     if (!form.name || !form.staffId || !form.username || !isSupabaseConfigured()) return;
+
+    let avatarUrl = targetUser?.avatar || '';
+
+    // Upload avatar if provided
+    if (form.avatar) {
+      const fileExt = form.avatar.name.split('.').pop();
+      const fileName = `${Date.now()}-${form.staffId}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, form.avatar);
+
+      if (uploadError) {
+        console.error('Avatar upload error:', uploadError);
+        alert('Failed to upload avatar. Please try again.');
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      avatarUrl = publicUrl;
+    }
 
     if (targetUser && isEditModalOpen) {
       await supabase.from('users').update({
@@ -127,7 +154,8 @@ const UserManagement = ({ users, setUsers, departments, roles, isAdmin }: { user
         username: form.username,
         role: form.role,
         department: form.department,
-        status: form.status
+        status: form.status,
+        avatar: avatarUrl
       }).eq('id', targetUser.id);
     } else {
       await supabase.from('users').insert([{
@@ -138,7 +166,8 @@ const UserManagement = ({ users, setUsers, departments, roles, isAdmin }: { user
         role: form.role,
         department: form.department,
         status: 'active',
-        must_change_password: true
+        must_change_password: true,
+        avatar: avatarUrl
       }]);
     }
     closeModals();
@@ -259,6 +288,35 @@ const UserManagement = ({ users, setUsers, departments, roles, isAdmin }: { user
               <input placeholder="Staff ID" className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border" value={form.staffId} onChange={e => setForm({...form, staffId: e.target.value})} />
               <input placeholder="Username" className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border" value={form.username} onChange={e => setForm({...form, username: e.target.value})} />
               {!targetUser && <input type="password" placeholder="Initial Password" className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border" value={form.password} onChange={e => setForm({...form, password: e.target.value})} />}
+
+              {/* Avatar Upload */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold dark:text-white flex items-center gap-2">
+                  <Camera size={16} /> Profile Avatar
+                </label>
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center overflow-hidden">
+                    {form.avatarPreview ? (
+                      <img src={form.avatarPreview} alt="Avatar preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <Camera size={24} className="text-slate-400" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setForm({...form, avatar: file, avatarPreview: URL.createObjectURL(file)});
+                        }
+                      }}
+                      className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <select className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
                   {roles.map(r => <option key={r} value={r}>{r}</option>)}
@@ -590,6 +648,8 @@ const LeaveManagementForm = ({ currentUser, requests, setRequests, language, use
 };
 
 const SafetyReview = ({ reports, setReports, users }: { reports: SafetyReport[], setReports: any, users: User[] }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+
   const updateStatus = async (id: string, status: SafetyReport['status']) => {
     if (!isSupabaseConfigured()) return;
     const { error } = await supabase.from('safety_reports').update({ status }).eq('id', id);
@@ -600,9 +660,26 @@ const SafetyReview = ({ reports, setReports, users }: { reports: SafetyReport[],
     }
   };
 
+  const filteredReports = reports.filter(rep =>
+    rep.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    rep.reporterName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    rep.severity.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    rep.status.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
-      {reports.length > 0 ? reports.map(rep => (
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-bold dark:text-white">Safety Reports ({filteredReports.length})</h3>
+        <input
+          type="text"
+          placeholder="Search reports..."
+          className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+        />
+      </div>
+      {filteredReports.length > 0 ? filteredReports.map(rep => (
         <div key={rep.id} className={`p-5 border border-slate-100 dark:border-slate-800 rounded-3xl space-y-3 bg-white dark:bg-slate-900 shadow-sm transition-opacity ${rep.status === 'resolved' ? 'opacity-60 bg-slate-50 dark:bg-slate-950/20' : ''}`}>
           <div className="flex justify-between items-start">
             <div className="flex gap-2 items-center">

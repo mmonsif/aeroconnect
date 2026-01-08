@@ -163,13 +163,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, language, users, globalMessag
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-0.5">
+                  <div className="flex justify-between items-center">
                     <span className={`text-sm dark:text-white truncate ${unreadCount > 0 ? 'font-black' : 'font-bold'}`}>{c.name}</span>
                     <span className="text-[9px] text-slate-400 font-bold">{lastMsg?.timestamp || ''}</span>
                   </div>
-                  <p className={`text-[10px] uppercase tracking-tighter truncate ${unreadCount > 0 ? 'text-blue-600 font-black' : 'text-slate-500 font-bold'}`}>
-                    {lastMsg?.text || c.department}
-                  </p>
                 </div>
               </div>
             );

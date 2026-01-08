@@ -170,7 +170,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ user, language, tasks, setTasks, 
       </div>
 
       <div className="flex items-center gap-3 overflow-x-auto pb-2 custom-scrollbar">
-        {['all', 'pending', 'in_progress', 'completed', 'blocked'].map((f) => (
+        {['all', 'pending', 'in_progress', 'completed'].map((f) => (
           <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all border ${filter === f ? 'bg-slate-900 text-white dark:bg-white dark:text-black border-transparent' : 'bg-white text-slate-400 dark:bg-slate-900 dark:text-slate-500 border-slate-100 dark:border-slate-800'}`}>{f.replace('_', ' ')}</button>
         ))}
       </div>

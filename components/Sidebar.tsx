@@ -19,7 +19,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ user, language, isOpen, onClose, onBroadcast, unreadChatsCount = 0 }) => {
   const t = TRANSLATIONS[language];
   const isRTL = language === 'ar';
-  const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SAFETY_MANAGER;
+  const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SAFETY_MANAGER || user.role === UserRole.MANAGER;
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
   const [broadcastMessage, setBroadcastMessage] = useState('');
 

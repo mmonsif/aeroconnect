@@ -212,26 +212,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user, language, onToggleTheme, da
   const q = searchQuery.toLowerCase();
   
   // Comprehensive Deep Search Logic
-  const results = {
-    tasks: visibleTasks.filter(t => 
-      t.title.toLowerCase().includes(q) || 
-      t.description.toLowerCase().includes(q) || 
+  const results: {
+    tasks: any;
+    docs: any;
+    staff: any;
+    leave: any;
+    reports: any;
+  } = {
+    tasks: visibleTasks.filter(t =>
+      t.title.toLowerCase().includes(q) ||
+      t.description.toLowerCase().includes(q) ||
       t.location.toLowerCase().includes(q)
     ),
-    reports: data.safetyReports.filter(r => {
-      const inDescription = r.description.toLowerCase().includes(q);
-      const inAIAnalysis = r.aiAnalysis?.toLowerCase().includes(q);
-      const inLocations = r.entities?.locations.some(loc => loc.toLowerCase().includes(q));
-      const inEquipment = r.entities?.equipment.some(eq => eq.toLowerCase().includes(q));
-      const inPersonnel = r.entities?.personnel.some(p => p.toLowerCase().includes(q));
-      return inDescription || inAIAnalysis || inLocations || inEquipment || inPersonnel;
-    }),
-    docs: data.docs.filter(d => 
+    docs: data.docs.filter(d =>
       d.name.toLowerCase().includes(q)
     ),
-    staff: data.users.filter(u => 
-      u.name.toLowerCase().includes(q) || 
-      u.staffId.toLowerCase().includes(q) || 
+    staff: data.users.filter(u =>
+      u.name.toLowerCase().includes(q) ||
+      u.staffId.toLowerCase().includes(q) ||
       u.department.toLowerCase().includes(q)
     ),
     leave: data.leaveRequests.filter(l => {
@@ -240,6 +238,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, language, onToggleTheme, da
       if (!isOwner && !isPrivileged) return false;
       return l.staffName.toLowerCase().includes(q) || l.reason.toLowerCase().includes(q) || l.type.toLowerCase().includes(q);
     }),
+    reports: data.safetyReports.filter(r =>
+      r.description.toLowerCase().includes(q) ||
+      r.type.toLowerCase().includes(q)
+    ),
   };
 
   const totalResults = results.tasks.length + results.reports.length + results.docs.length + results.staff.length + results.leave.length;

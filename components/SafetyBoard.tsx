@@ -332,39 +332,7 @@ const SafetyBoard: React.FC<SafetyBoardProps> = ({ user, language, reports, setR
         </div>
       )}
 
-      <div className="space-y-4 pb-20">
-        <h3 className="font-bold dark:text-white flex items-center gap-2 px-2"><AlertCircle size={20} className="text-orange-500" />Recent Safety Feed</h3>
-        {reports.slice(0, 5).map(rep => (
-          <div key={rep.id} className="p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
-            <div className="flex justify-between mb-2">
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${rep.severity === 'high' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'}`}>
-                {rep.severity} SEVERITY
-              </span>
-              <span className="text-[10px] text-slate-400 font-bold">{rep.timestamp}</span>
-            </div>
-            <p className="font-bold text-sm dark:text-white mb-2">{rep.description}</p>
 
-            {/* Display attached images */}
-            {rep.imageUrls && rep.imageUrls.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {rep.imageUrls.map((url, index) => (
-                  <img
-                    key={index}
-                    src={url}
-                    alt={`Safety report image ${index + 1}`}
-                    className="w-16 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => window.open(url, '_blank')}
-                  />
-                ))}
-              </div>
-            )}
-
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-              Reporter: {rep.reporterId === 'anonymous' ? 'Anonymous Staff' : (rep.reporterName || 'Registered Member')}
-            </p>
-          </div>
-        ))}
-      </div>
     </div>
   );
 };

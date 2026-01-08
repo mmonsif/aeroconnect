@@ -1,10 +1,18 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Language, AppNotification } from '../types';
+import { User, Language, AppNotification, Task, SafetyReport, DocFile, LeaveRequest } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { Bell, Search, Languages, Menu, Check, Trash2, Clock, LogOut } from 'lucide-react';
+import { Bell, Search, Languages, Menu, Check, Trash2, Clock, LogOut, FileText, Users, ClipboardList, AlertTriangle, Calendar } from 'lucide-react';
 // Changed import from react-router-dom to react-router to resolve missing export errors
 import { useNavigate } from 'react-router';
+
+interface SearchResults {
+  tasks: Task[];
+  docs: DocFile[];
+  staff: User[];
+  leave: LeaveRequest[];
+  reports: SafetyReport[];
+}
 
 interface HeaderProps {
   user: User;
@@ -16,6 +24,7 @@ interface HeaderProps {
   notifications: AppNotification[];
   setNotifications: React.Dispatch<React.SetStateAction<AppNotification[]>>;
   onLogout: () => void;
+  searchResults: SearchResults | null;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -27,7 +36,8 @@ const Header: React.FC<HeaderProps> = ({
   onSearchChange,
   notifications,
   setNotifications,
-  onLogout
+  onLogout,
+  searchResults
 }) => {
   const t = TRANSLATIONS[language];
   const navigate = useNavigate();
@@ -69,7 +79,7 @@ const Header: React.FC<HeaderProps> = ({
         navigate('/manuals');
         break;
       case 'leave':
-        navigate('/admin?tab=leave');
+        navigate('/my-leave');
         break;
       case 'forum':
         navigate('/forum');
@@ -101,13 +111,107 @@ const Header: React.FC<HeaderProps> = ({
         </button>
         <div className="relative max-w-md w-full hidden sm:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={t.searchPlaceholder}
             className={`w-full bg-slate-50 dark:bg-slate-800 dark:text-white border-none rounded-xl py-2 px-10 focus:ring-2 focus:ring-blue-500 transition-all text-sm outline-none shadow-inner`}
           />
+          {searchResults && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-h-96 overflow-y-auto z-50">
+              {searchResults.tasks.length > 0 && (
+                <div className="p-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ClipboardList size={16} className="text-blue-500" />
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Tasks</span>
+                  </div>
+                  {searchResults.tasks.slice(0, 3).map(task => (
+                    <div
+                      key={task.id}
+                      onClick={() => navigate('/tasks')}
+                      className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                    >
+                      <p className="text-sm font-medium dark:text-white">{task.title}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{task.location}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchResults.docs.length > 0 && (
+                <div className="p-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText size={16} className="text-green-500" />
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Documents</span>
+                  </div>
+                  {searchResults.docs.slice(0, 3).map(doc => (
+                    <div
+                      key={doc.id}
+                      onClick={() => navigate('/manuals')}
+                      className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                    >
+                      <p className="text-sm font-medium dark:text-white">{doc.name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{doc.type}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchResults.staff.length > 0 && (
+                <div className="p-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users size={16} className="text-purple-500" />
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Staff</span>
+                  </div>
+                  {searchResults.staff.slice(0, 3).map(staff => (
+                    <div
+                      key={staff.id}
+                      onClick={() => navigate('/admin?tab=users')}
+                      className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                    >
+                      <p className="text-sm font-medium dark:text-white">{staff.name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{staff.staffId} - {staff.department}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchResults.leave.length > 0 && (
+                <div className="p-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calendar size={16} className="text-orange-500" />
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Leave Requests</span>
+                  </div>
+                  {searchResults.leave.slice(0, 3).map(leave => (
+                    <div
+                      key={leave.id}
+                      onClick={() => navigate('/admin?tab=leave')}
+                      className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                    >
+                      <p className="text-sm font-medium dark:text-white">{leave.staffName}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{leave.type} - {leave.status}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchResults.reports.length > 0 && (
+                <div className="p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle size={16} className="text-red-500" />
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Safety Reports</span>
+                  </div>
+                  {searchResults.reports.slice(0, 3).map(report => (
+                    <div
+                      key={report.id}
+                      onClick={() => navigate('/safety')}
+                      className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+                    >
+                      <p className="text-sm font-medium dark:text-white">{report.type}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{report.description.substring(0, 50)}...</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
